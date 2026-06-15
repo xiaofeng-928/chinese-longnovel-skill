@@ -36,6 +36,8 @@ MyNovel/
 ├── SKILL.md
 ├── agents/
 │   └── openai.yaml
+├── scripts/
+│   └── novel_lint.py
 ├── prompts/
 │   ├── 大纲生成提示词.md
 │   ├── 分阶段大纲细化提示词.md
@@ -72,7 +74,7 @@ MyNovel/
   - 同一章出现多个正文文件时必须停止并让用户确认。
   - 阶段总结是长期记忆层，尤其负责保存关键时间锚。
 - 脚本策略：
-  - 通用脚本统一放在 `D:\ai小说\提示词和脚本`。
+  - 通用脚本统一放在本 Skill 的 `scripts/` 目录。
   - 项目专属导出脚本，如 `convert_to_epub.py`，保留在单本小说项目目录。
   - 脚本输出可作为审查报告和验证结论的证据。
 
@@ -190,10 +192,10 @@ MyNovel/
 - 子 agent 也可以执行，只要提示词提供稳定路径和参数。
 - Skill 不依赖底层自动钩子；它通过规则要求 AI 在合适时机运行脚本。
 
-通用脚本统一放在：
+通用脚本统一放在 MyNovel Skill 内部：
 
 ```text
-D:\ai小说\提示词和脚本\
+C:\Users\Lenovo\.claude\skills\MyNovel\scripts\
 ```
 
 项目专属脚本只用于单本小说导出和打包：
@@ -216,7 +218,7 @@ D:\ai小说\小说\<书名>\convert_to_epub.py
 ### 第二阶段：脚本契约和第一个脚本
 
 - 新增 `自动化脚本契约.md`。
-- 在 `D:\ai小说\提示词和脚本` 下实现第一个脚本。
+- 在 `C:\Users\Lenovo\.claude\skills\MyNovel\scripts\` 下实现第一个脚本。
 - 推荐第一个脚本为 `novel_lint.py`，先做字数统计和 AI味扫描，因为阈值已经量化。
 - 审查流程将脚本输出作为证据写入审查报告。
 
