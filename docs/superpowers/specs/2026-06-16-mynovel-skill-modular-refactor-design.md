@@ -1,28 +1,35 @@
-# MyNovel Skill Modular Refactor Design
+# MyNovel Skill 模块化重构设计
 
-## Goal
+## 目标
 
-Refactor `MyNovel` from a large single-file workflow into a modular skill that keeps `SKILL.md` concise, moves detailed procedures into first-level `references/`, and reserves stable script interfaces for deterministic checks such as file locating, anchor replacement, word counts, AI-flavor scans, forbidden terms, and timeline anchors.
+把 `MyNovel` 从一个超长的单文件工作流，重构成“短入口 + 按需参考文档 + 未来脚本接口”的模块化 Skill。
 
-## Current State
+重构后的目标是：
 
-- Authoritative skill directory: `C:\Users\Lenovo\.claude\skills\MyNovel`
-- Baseline commit/tag: `v1.0`
-- Current `SKILL.md` size: about 819 lines and about 23k characters.
-- Existing supporting files: `prompts/` contains generation, review, repair, outline, and golden-three-chapter prompts.
-- Current weakness: `SKILL.md` contains routing, project discovery, context assembly, drafting, review, repair, summary formats, consistency checks, file naming, anchor rules, and config templates in one body. This makes the workflow usable but attention-heavy.
+- `SKILL.md` 只保留入口、路由、硬性闸门和导航。
+- 复杂流程拆到一级 `references/` 文档中，需要哪个流程才读取哪个文档。
+- 现有 `prompts/` 继续作为生成、审查、修复等大提示词来源，第一阶段不大改。
+- 给未来脚本自动化预留稳定接口，用于章节定位、锚点替换、字数统计、AI味扫描、禁用词扫描、时间锚检查等确定性工作。
 
-## Design Principles
+## 当前状态
 
-1. Keep `SKILL.md` as the router and hard-gate layer.
-2. Move detailed workflows into first-level `references/` files, each linked directly from `SKILL.md`.
-3. Keep existing `prompts/` stable in the first refactor pass.
-4. Add script contracts before implementing scripts so both Claude Code and Codex know when script output is authoritative evidence.
-5. Preserve current behavior: no route, window limit, archive rule, anchor rule, or context layer may be dropped during the split.
-6. Avoid deep reference chains: `SKILL.md` must point directly to every reference file an agent may need.
-7. Keep deterministic work scriptable over time; keep creative judgment with the AI.
+- 权威 Skill 目录：`C:\Users\Lenovo\.claude\skills\MyNovel`
+- 当前基线：已提交并打标签 `v1.0`
+- 当前 `SKILL.md` 规模：约 819 行、约 2.3 万字符。
+- 已有辅助文件：`prompts/` 中已有大纲生成、细纲、草稿生成、草稿审查、自动修复、黄金三章等提示词。
+- 当前主要问题：`SKILL.md` 同时承担路由、项目定位、上下文组装、写作、审查、修复、总结格式、文件命名、锚点规则、配置模板等职责，能用，但对 AI 注意力要求太高。
 
-## Target Structure
+## 设计原则
+
+1. 让 `SKILL.md` 只做“路由器”和“硬闸门”。
+2. 把详细工作流拆到一级 `references/` 文件中，并在 `SKILL.md` 里直接链接。
+3. 第一轮重构不改现有 `prompts/` 语义，避免同时改变太多变量。
+4. 先定义脚本调用契约，再逐步实现脚本，确保 Claude Code 和 Codex 都能按同一套方式使用。
+5. 保留现有行为：路由、章节窗口限制、50章归档、锚点规则、上下文层级都不能丢。
+6. 避免多层引用：所有参考文档必须由 `SKILL.md` 直接指向，不做深层跳转。
+7. 确定性体力活逐步脚本化；创作判断、审稿判断仍交给 AI。
+
+## 目标目录结构
 
 ```text
 MyNovel/
@@ -37,219 +44,225 @@ MyNovel/
 │   ├── 草稿审查提示词.md
 │   └── 草稿自动修复提示词.md
 └── references/
-    ├── project-discovery.md
-    ├── file-layout-and-anchors.md
-    ├── context-assembly.md
-    ├── drafting-workflow.md
-    ├── review-workflow.md
-    ├── repair-workflow.md
-    ├── summary-workflow.md
-    ├── consistency-workflow.md
-    └── automation-scripts-contract.md
+    ├── 项目定位.md
+    ├── 文件结构与锚点.md
+    ├── 上下文组装.md
+    ├── 草稿生成流程.md
+    ├── 草稿审查流程.md
+    ├── 草稿修复流程.md
+    ├── 总结流程.md
+    ├── 一致性检查.md
+    └── 自动化脚本契约.md
 ```
 
-## `SKILL.md` Responsibilities
+## `SKILL.md` 职责
 
-`SKILL.md` should keep only the instructions that must always be visible after the skill triggers:
+`SKILL.md` 只保留每次触发 Skill 后都必须看到的内容：
 
-- Project selection and authoritative directories.
-- Route table from user intent to workflow.
-- Window limits: direct writing, review, and repair are limited to five chapters; outline refinement is limited to fifty chapters.
-- Required reference file for each route.
-- Required prompt file for each route.
-- Global invariants:
-  - Use PowerShell-native search in this workspace.
-  - Do not skip context assembly for drafting, review, repair, or continuation.
-  - Do not overwrite unrelated 50-chapter archive blocks.
-  - Do not duplicate or break HTML anchors.
-  - Stop on duplicate chapter files.
-  - Treat stage summaries as the long-term memory layer, especially key time anchors.
-- Script policy:
-  - General workflow scripts live under `D:\ai小说\提示词和脚本`.
-  - Project-specific export scripts such as `convert_to_epub.py` stay inside each novel project.
-  - Script output is evidence for review reports and verification.
+- 项目选择和权威目录。
+- 用户意图到工作流的路由表。
+- 章节窗口限制：正文直写、审查、修复最多 5 章；分阶段大纲细化最多 50 章。
+- 每个路由需要读取的 `references/` 文件。
+- 每个路由需要读取的 `prompts/` 文件。
+- 全局硬规则：
+  - 在本工作区使用 PowerShell 原生命令搜索，不用 `rg` / `grep`。
+  - 正文生成、续写、审查、修复不得跳过上下文组装。
+  - 不得覆盖同一 50 章归档文件里的无关章节块。
+  - 不得重复追加或破坏 HTML 锚点。
+  - 同一章出现多个正文文件时必须停止并让用户确认。
+  - 阶段总结是长期记忆层，尤其负责保存关键时间锚。
+- 脚本策略：
+  - 通用脚本统一放在 `D:\ai小说\提示词和脚本`。
+  - 项目专属导出脚本，如 `convert_to_epub.py`，保留在单本小说项目目录。
+  - 脚本输出可作为审查报告和验证结论的证据。
 
-The target size for `SKILL.md` is 300-450 lines.
+`SKILL.md` 目标规模控制在 300-450 行。
 
-## Reference Files
+## 参考文档拆分
 
-### `project-discovery.md`
+### `项目定位.md`
 
-Own project detection and selection:
+负责小说项目检测与选择：
 
-- Scan `D:\ai小说` to depth two for `novel-config.md`.
-- Treat each containing folder as a novel project.
-- If multiple projects match and the user did not name one, ask which book.
-- If one project matches and the user intent is not new-project initialization, select it.
-- EPUB generation rule: find and run the project-local `convert_to_epub.py`; if absent, adapt from another novel project.
+- 扫描 `D:\ai小说` 下最多两层目录，查找 `novel-config.md`。
+- 每个包含 `novel-config.md` 的目录视为一本小说项目。
+- 如果有多个项目且用户未指定，询问操作哪一本。
+- 如果只有一个项目且用户不是开新坑，自动选中。
+- EPUB 生成规则：优先运行本小说目录下的 `convert_to_epub.py`；若没有，再参考其他小说项目脚本适配。
 
-### `file-layout-and-anchors.md`
+### `文件结构与锚点.md`
 
-Own file layout, naming, and archive mechanics:
+负责文件布局、命名和归档机制：
 
-- Standard novel project folders.
-- Chapter file naming and status tags.
-- Duplicate chapter file detection.
-- 50-chapter archive calculation.
-- Stage summary file calculation.
-- Stable HTML anchors for outline, summary, review, and repair blocks.
-- Replacement rules for re-generation, re-review, and re-repair.
+- 标准小说项目目录结构。
+- 正文章节文件命名和状态标签。
+- 同章多文件冲突检测。
+- 50 章归档块计算。
+- 阶段总结文件定位。
+- 大纲、总结、审查、修复块的稳定 HTML 锚点。
+- 重生成、重审、重修时的锚点替换规则。
 
-### `context-assembly.md`
+### `上下文组装.md`
 
-Own all context-building rules:
+负责所有上下文读取规则：
 
-- Stage summaries as long-term memory.
-- Recent three chapters as full text.
-- Recent twenty chapter summaries, including summaries for the recent three chapters.
-- Current full outline and next two chapter boundaries.
-- Conditional伏笔補读: original chapter text plus corresponding summary.
-- Logic dependency table: hard facts, key time anchors, character cognition, ability/resource state, relationship state, information flow, causal debts, and forbidden future mistakes.
-- Pre-writing alignment gate.
+- 阶段总结作为长期记忆层。
+- 最近 3 章正文全文。
+- 最近 20 章章节总结，且必须包含最近 3 章正文对应总结。
+- 本章完整大纲和后续 2 章边界大纲。
+- 伏笔补读：伏笔埋设原章正文 + 对应章节总结。
+- 逻辑依赖表：硬事实、关键时间锚、角色认知、能力/资源、关系状态、信息流、因果债、后文禁止误写。
+- 写前大纲-上下文校准闸门。
 
-### `drafting-workflow.md`
+### `草稿生成流程.md`
 
-Own draft generation:
+负责正文草稿生成：
 
-- Chapter range parsing.
-- Five-chapter direct writing limit.
-- Read `context-assembly.md`.
-- Read `prompts/草稿生成提示词.md`.
-- Write one chapter at a time.
-- After each chapter, generate/update the chapter summary.
-- Stop if outline and context conflict.
+- 解析章节范围。
+- 执行 5 章直写上限。
+- 读取 `上下文组装.md`。
+- 读取 `prompts/草稿生成提示词.md`。
+- 按章节顺序逐章写作。
+- 每写完一章立即生成/更新章节总结。
+- 如果大纲和上下文冲突，停止并报告。
 
-### `review-workflow.md`
+### `草稿审查流程.md`
 
-Own review:
+负责草稿审查：
 
-- Five-chapter direct review limit.
-- Required inputs.
-- Review dependency table, including key time anchors.
-- A/B issue classes.
-- Quantitative checks delegated to scripts when available.
-- Review report archive rules.
-- Default stop after review; do not auto-repair unless explicitly requested.
+- 执行 5 章直审上限。
+- 明确审查输入。
+- 派生审查逻辑依赖表，必须包含关键时间锚。
+- A/B 类问题分类。
+- 当脚本可用时，量化检查优先交给脚本。
+- 审查报告归档规则。
+- 默认审查后停止，不自动修复，除非用户明确要求。
 
-### `repair-workflow.md`
+### `草稿修复流程.md`
 
-Own automatic repair:
+负责自动修复：
 
-- Explicit trigger only.
-- Requires review report or user-specified issue.
-- Five-chapter direct repair limit.
-- Read target chapter, outline, writing rules, character profiles, and relevant report entries.
-- Apply A-class fixes first.
-- Run local recheck for modified paragraphs.
-- Update review report, chapter summary, and file status.
-- Verify all writes.
+- 只有用户明确要求“修复/审查并修复”时触发。
+- 需要审查报告或用户明确指出的问题。
+- 执行 5 章直修上限。
+- 读取目标正文、对应大纲、写作铁律、角色档案、审查报告问题。
+- 先修 A 类硬伤。
+- 对修改段落做局部复查。
+- 更新审查报告、章节总结和章节文件状态。
+- 复读验证所有落盘结果。
 
-### `summary-workflow.md`
+### `总结流程.md`
 
-Own chapter and stage summaries:
+负责章节总结和阶段总结：
 
-- Chapter summary format.
-- Stage summary format.
-- `关键时间锚` rules:
-  - Only record time anchors that affect future logic, relationships,伏笔, deadlines, or stage transitions.
-  - Do not record daily time流水.
-- Save/update rules using anchors.
-- Session-end summary update workflow.
+- 章节总结格式。
+- 阶段总结格式。
+- `关键时间锚` 规则：
+  - 只记录影响后文逻辑、角色关系、伏笔、倒计时、阶段衔接的重要时间。
+  - 不记录每章日常时间流水。
+- 使用锚点保存和更新。
+- 会话结束时补齐章节总结和阶段总结。
 
-### `consistency-workflow.md`
+### `一致性检查.md`
 
-Own cross-chapter and cross-stage checks:
+负责跨章节、跨阶段检查：
 
-- Read all stage summaries, recent three chapter texts, recent twenty chapter summaries, `novel-config.md`, and伏笔 tracking table.
-- Check dead characters, ability overuse, relationship rollback, overdue伏笔, timeline conflict, repeated settings, evidence conflict, cognition overreach, information leak, causal break, and伏笔 meaning drift.
-- Emit actionable report only.
+- 读取全部阶段总结、最近 3 章正文、最近 20 章章节总结、`novel-config.md`、伏笔追踪表。
+- 检查死人复活、能力越级、关系回退、伏笔超期、时间线矛盾、重复设定、前文证据冲突、角色认知越界、信息流泄露、因果断裂、伏笔含义变形。
+- 只输出可操作报告。
 
-### `automation-scripts-contract.md`
+### `自动化脚本契约.md`
 
-Own planned script interfaces:
+负责未来脚本接口：
 
-- `novel_files.py`: locate project files, calculate archive paths, detect duplicate chapter files.
-- `novel_anchor.py`: inspect and replace stable anchor blocks.
-- `novel_lint.py`: word count, AI-flavor terms, forbidden terms, key time anchors, ability unlock scans.
-- `novel_context.py`: assemble deterministic file lists for context layers.
-- Scripts are optional at first, but when a script exists and matches the task, agents should prefer it over manual counting or ad hoc text scanning.
+- `novel_files.py`：定位项目文件、计算归档路径、检测同章多文件。
+- `novel_anchor.py`：检查和替换稳定锚点块。
+- `novel_lint.py`：字数统计、AI味词、禁用词、关键时间锚、能力解锁扫描。
+- `novel_context.py`：确定性组装上下文文件列表。
+- 第一阶段脚本可以不存在；一旦脚本存在且适用，AI 应优先使用脚本结果，而不是手工数词或临时搜索。
 
-## Script Compatibility
+## 脚本兼容性
 
-The scripts should be ordinary local CLI scripts, not platform-specific hooks.
+脚本应设计成普通本地命令行工具，而不是依赖某个平台的隐藏 hook。
 
-- Claude Code can run them through shell commands.
-- Codex can run them through shell commands.
-- Subagents can run them if the prompt gives the stable path and required arguments.
-- The skill should not rely on hidden platform hooks.
+- Claude Code 可以通过 shell 执行。
+- Codex 可以通过 shell 执行。
+- 子 agent 也可以执行，只要提示词提供稳定路径和参数。
+- Skill 不依赖底层自动钩子；它通过规则要求 AI 在合适时机运行脚本。
 
-Use stable workspace paths for shared workflow scripts:
+通用脚本统一放在：
 
 ```text
 D:\ai小说\提示词和脚本\
 ```
 
-Use project-local scripts only for project-specific exports and packaging:
+项目专属脚本只用于单本小说导出和打包：
 
 ```text
-D:\ai小说\小说\<book>\convert_to_epub.py
+D:\ai小说\小说\<书名>\convert_to_epub.py
 ```
 
-## Migration Phases
+## 迁移阶段
 
-### Phase 1: Structural Split
+### 第一阶段：结构拆分
 
-- Create `references/`.
-- Move detailed prose from `SKILL.md` into reference files.
-- Rewrite `SKILL.md` into a router and hard-gate document.
-- Do not change prompts.
-- Do not implement scripts yet.
-- Validate that every current route points to a reference file and prompt file.
+- 创建 `references/`。
+- 把 `SKILL.md` 中的详细流程拆到参考文档。
+- 将 `SKILL.md` 重写成路由和硬闸门文档。
+- 不修改现有 `prompts/`。
+- 暂不实现脚本。
+- 验证所有现有路由都能指向对应参考文档和提示词。
 
-### Phase 2: Script Contract and First Script
+### 第二阶段：脚本契约和第一个脚本
 
-- Add `automation-scripts-contract.md`.
-- Implement the first script outside the skill package under `D:\ai小说\提示词和脚本`.
-- Recommended first script: `novel_lint.py` for word count and AI-flavor scans because the thresholds are already quantified.
-- Make review workflow cite script output as evidence.
+- 新增 `自动化脚本契约.md`。
+- 在 `D:\ai小说\提示词和脚本` 下实现第一个脚本。
+- 推荐第一个脚本为 `novel_lint.py`，先做字数统计和 AI味扫描，因为阈值已经量化。
+- 审查流程将脚本输出作为证据写入审查报告。
 
-### Phase 3: File Operations Scripts
+### 第三阶段：文件操作脚本
 
-- Implement `novel_files.py` for locating chapters and calculating archive targets.
-- Implement `novel_anchor.py` for anchor inspection and safe replacement.
-- Update references to prefer scripts when available.
+- 实现 `novel_files.py`，用于章节定位和归档路径计算。
+- 实现 `novel_anchor.py`，用于锚点检查和安全替换。
+- 更新参考文档：脚本存在且适用时优先使用脚本。
 
-### Phase 4: Forward Testing
+### 第四阶段：真实任务前向测试
 
-- Test with realistic tasks:
-  - Review a chapter with an injected time-anchor error.
-  - Repair a chapter with duplicate chapter file conflict.
-  - Generate/update a stage summary with only important time anchors.
-  - Run AI-flavor scan and cite numerical output.
-- Compare outcomes against `v1.0`.
+用真实任务验证重构后的 skill：
 
-## Validation Checklist
+- 审查一个带时间锚错误的章节。
+- 修复一个同章多文件冲突的场景。
+- 生成/更新只包含重要时间锚的阶段总结。
+- 运行 AI味扫描并引用量化结果。
+- 和 `v1.0` 的行为对比，确认没有丢关键规则。
 
-- `SKILL.md` frontmatter remains valid.
-- `SKILL.md` stays under 500 lines.
-- Every route from the original routing table still exists.
-- Every direct workflow has a reference file.
-- Every prompt referenced from `SKILL.md` exists.
-- Five-chapter and fifty-chapter limits remain visible in `SKILL.md`.
-- Key time anchors remain required in stage summaries.
-- Review workflow still checks key time anchors.
-- Anchor replacement rules remain available.
-- Duplicate chapter file conflicts still stop the workflow.
-- No script is required unless it exists and is applicable.
-- Git tag `v1.0` remains as rollback baseline.
+## 验收清单
 
-## Risks
+- `SKILL.md` frontmatter 有效。
+- `SKILL.md` 少于 500 行。
+- 原有路由表中的每个工作流仍然存在。
+- 每个直接工作流都有对应参考文档。
+- `SKILL.md` 引用的每个提示词文件都存在。
+- 5 章直写/直审/直修上限仍在 `SKILL.md` 中可见。
+- 50 章归档规则仍在 `SKILL.md` 中可见。
+- 阶段总结仍强制要求关键时间锚。
+- 审查流程仍检查关键时间锚。
+- 锚点替换规则仍可找到。
+- 同章多文件冲突仍会停止流程。
+- 脚本不存在时不强制调用；脚本存在且适用时优先使用。
+- `v1.0` 标签仍作为回滚基线。
 
-- Over-splitting can make agents miss the right reference. Mitigation: keep all references one level deep and list exact route-to-reference mapping in `SKILL.md`.
-- Keeping process docs inside the skill repository can clutter the package. Mitigation: remove or archive `docs/superpowers/` after the refactor if the final distributable should contain only skill assets.
-- Script contracts can drift from real scripts. Mitigation: once scripts exist, each script must have a tested command example in `automation-scripts-contract.md`.
-- The first refactor can accidentally change behavior. Mitigation: treat Phase 1 as a split-only change and compare routes against `v1.0`.
+## 风险与缓解
 
-## Approval Gate
+- 风险：拆太细后 AI 找不到该读哪个参考文档。
+  - 缓解：所有参考文档只放一级，并在 `SKILL.md` 中写清楚“路由 → 参考文档”的对应关系。
+- 风险：过程性设计文档污染 Skill 包。
+  - 缓解：重构完成后，如果最终分发版需要纯净，可以移除或单独归档 `docs/superpowers/`。
+- 风险：脚本契约和真实脚本漂移。
+  - 缓解：脚本实现后，`自动化脚本契约.md` 必须包含已测试命令示例。
+- 风险：第一轮重构无意改变现有行为。
+  - 缓解：第一阶段只做拆分，不改业务语义，并用 `v1.0` 对比路由和硬规则。
 
-After this design is reviewed, create a detailed implementation plan before modifying `SKILL.md` or adding references.
+## 执行前确认
+
+确认本设计后，再编写详细 implementation plan；在 plan 完成前，不修改 `SKILL.md` 或新增 `references/`。
