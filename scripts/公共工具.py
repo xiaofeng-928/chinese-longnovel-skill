@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 from pathlib import Path
 
 
@@ -26,7 +27,7 @@ def json_text(data):
 
 
 def json_dump(data):
-    print(json_text(data))
+    write_stdout(json_text(data) + "\n")
 
 
 def success(command, **kwargs):
@@ -147,7 +148,14 @@ def markdown_response(data):
 
 def emit(data, output_format):
     if output_format == "markdown":
-        print(markdown_response(data))
+        write_stdout(markdown_response(data) + "\n")
     else:
         json_dump(data)
 
+
+def write_stdout(text):
+    data = text.encode("utf-8")
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout.buffer.write(data)
+    else:
+        sys.stdout.write(text)
