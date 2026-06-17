@@ -2,7 +2,7 @@ import argparse
 import re
 from pathlib import Path
 
-from 公共工具 import emit, failure, read_text, success
+from 公共工具 import count_review_chars, emit, failure, read_text, success
 from 质检规则 import (
     ABILITY_TERMS,
     AI_THRESHOLDS,
@@ -13,9 +13,6 @@ from 质检规则 import (
     TIME_ANCHOR_TERMS,
 )
 
-
-def count_non_whitespace(text):
-    return sum(1 for char in text if not char.isspace())
 
 
 def count_terms(text, terms):
@@ -96,7 +93,7 @@ def lint(args):
             "file": str(file_path),
             "forbidden_words": str(args.forbidden_words) if args.forbidden_words else None,
         },
-        word_count={"count": count_non_whitespace(text), "unit": "non_whitespace_char"},
+        word_count={"count": count_review_chars(text), "unit": "review_char"},
         ai_flavor=scan_ai_flavor(text),
         forbidden_words=scan_forbidden_words(text, forbidden_words),
         time_anchor_candidates=scan_candidates(text, TIME_ANCHOR_TERMS),
