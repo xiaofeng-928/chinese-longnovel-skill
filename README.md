@@ -53,13 +53,11 @@ MyNovel/
 │   ├── 总结流程.md
 │   ├── 一致性检查.md
 │   └── 自动化脚本契约.md
-├── scripts/                          # 通用质检脚本
-│   ├── 小说质检.py
-│   ├── count_chars.py
-│   ├── 公共工具.py
-│   └── 质检规则.py
-└── agents/                           # Agent 配置
-    └── openai.yaml
+└── scripts/                          # 通用质检脚本
+    ├── 小说质检.py
+    ├── count_chars.py
+    ├── 公共工具.py
+    └── 质检规则.py
 ```
 
 ## 安装
