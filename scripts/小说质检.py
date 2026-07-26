@@ -87,6 +87,12 @@ def lint(args):
     file_path = Path(args.file)
     text = read_text(file_path)
     forbidden_words = load_forbidden_words(args.forbidden_words)
+    warnings = []
+    if not args.forbidden_words:
+        warnings.append({
+            "code": "FORBIDDEN_WORDS_NOT_CONFIGURED",
+            "message": "未提供禁用词文件；禁用词扫描结果为空，不代表正文通过禁用词检查。",
+        })
     return success(
         "lint",
         inputs={
@@ -98,7 +104,7 @@ def lint(args):
         forbidden_words=scan_forbidden_words(text, forbidden_words),
         time_anchor_candidates=scan_candidates(text, TIME_ANCHOR_TERMS),
         ability_candidates=scan_candidates(text, ABILITY_TERMS),
-        warnings=[],
+        warnings=warnings,
     )
 
 

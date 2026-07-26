@@ -113,6 +113,12 @@ class TestNovelLint(unittest.TestCase):
         matches = {item["word"]: item["count"] for item in data["forbidden_words"]["matches"]}
         self.assertEqual(matches["绝对不能写的"], 1)
 
+    def test_warns_when_forbidden_words_are_not_configured(self):
+        text_file = self.write_temp_text("普通正文。")
+        data = run_script("小说质检.py", "lint", "--file", str(text_file))
+        warning_codes = {item["code"] for item in data["warnings"]}
+        self.assertIn("FORBIDDEN_WORDS_NOT_CONFIGURED", warning_codes)
+
 
 class TestCountChars(unittest.TestCase):
     """验证 count_chars.py CLI 与小说质检.py 口径一致。"""
