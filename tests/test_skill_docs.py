@@ -3,10 +3,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LONG_ROOT = ROOT / "long-form"
 
 
 def read_doc(relative_path):
-    return (ROOT / relative_path).read_text(encoding="utf-8")
+    return (LONG_ROOT / relative_path).read_text(encoding="utf-8")
 
 
 class TestStageOutlineMemorySyncDocs(unittest.TestCase):
@@ -75,6 +76,30 @@ class TestStageOutlineMemorySyncDocs(unittest.TestCase):
 
 
 class TestWorkflowContractDocs(unittest.TestCase):
+    def test_rank_scan_has_a_formal_route_row(self):
+        skill = read_doc("SKILL.md")
+
+        route_rows = [line for line in skill.splitlines() if "rank-scan" in line]
+        self.assertEqual(len(route_rows), 1)
+        self.assertIn("references/扫榜流程.md", route_rows[0])
+        self.assertIn("prompts/扫榜提示词.md", route_rows[0])
+
+    def test_p0_review_modes_and_rank_scan_are_documented(self):
+        skill = read_doc("SKILL.md")
+        summary = read_doc("references/总结流程.md")
+        review = read_doc("references/草稿审查流程.md")
+        scan = read_doc("references/扫榜流程.md")
+        prompt = read_doc("prompts/扫榜提示词.md")
+
+        for phrase in ["扫榜与选题", "扫榜流程.md", "扫榜提示词.md"]:
+            self.assertIn(phrase, skill)
+        for phrase in ["细纲计划", "正文实际", "structural"]:
+            self.assertIn(phrase, summary)
+        for phrase in ["Requested Mode:", "Effective Mode:", "Fallback:", ".deslop-whitelist"]:
+            self.assertIn(phrase, review)
+        for phrase in ["样本少于 5 个", "选题决策.md", "不编造榜单数据"]:
+            self.assertIn(phrase, scan + prompt)
+
     def test_skill_metadata_and_archive_contract_are_normalized(self):
         skill = read_doc("SKILL.md")
         structure = read_doc("references/文件结构与锚点.md")

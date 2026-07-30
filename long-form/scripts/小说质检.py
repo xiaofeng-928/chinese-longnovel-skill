@@ -64,14 +64,30 @@ def scan_candidates(text, terms):
     return candidates
 
 
-def load_forbidden_words(path):
+def find_project_root(file_path):
+    for parent in [file_path.parent, *file_path.parents]:
+        if (parent / "novel-config.md").is_file():
+            return parent
+    return None
+
+
+def load_word_file(path):
+    if not path or not Path(path).is_file():
+        return []
+    words = []
+    for line in read_text(path).splitlines():
+        word = line.strip()
+        if word and not word.startswith("#"):
+            words.append(word)
+    return words
+
+
+def load_forbidden_words(path, project_root=None):
     words = list(DEFAULT_FORBIDDEN_WORDS)
     if path:
-        for line in read_text(path).splitlines():
-            word = line.strip()
-            if word and not word.startswith("#"):
-                words.append(word)
-    return words
+        words.extend(load_word_file(path))
+    whitelist_path = project_root / ".deslop-whitelist" if project_root else None
+    return words, whitelist_path, load_word_file(whitelist_path)
 
 
 def scan_forbidden_words(text, words):
@@ -86,7 +102,12 @@ def scan_forbidden_words(text, words):
 def lint(args):
     file_path = Path(args.file)
     text = read_text(file_path)
-    forbidden_words = load_forbidden_words(args.forbidden_words)
+    project_root = find_project_root(file_path)
+    forbidden_words, whitelist_path, whitelist = load_forbidden_words(
+        args.forbidden_words, project_root
+    )
+    if whitelist:
+        forbidden_words = [word for word in forbidden_words if word not in whitelist]
     warnings = []
     if not args.forbidden_words:
         warnings.append({
@@ -98,6 +119,8 @@ def lint(args):
         inputs={
             "file": str(file_path),
             "forbidden_words": str(args.forbidden_words) if args.forbidden_words else None,
+            "project_root": str(project_root) if project_root else None,
+            "whitelist": str(whitelist_path) if whitelist_path and whitelist_path.is_file() else None,
         },
         word_count={"count": count_review_chars(text), "unit": "review_char"},
         ai_flavor=scan_ai_flavor(text),
