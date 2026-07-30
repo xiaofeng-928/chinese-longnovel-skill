@@ -36,6 +36,17 @@ class TestModeRouting(unittest.TestCase):
         self.assertTrue((short_root / "references" / "上下文装配.md").is_file())
         self.assertIn("<作品类型>/提示词/创作提示词.md", (short_root / "SKILL.md").read_text(encoding="utf-8"))
 
+    def test_short_form_requires_structural_review_before_type_prompt_changes(self):
+        short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")
+
+        for phrase in [
+            "类型提示词审查",
+            "功能与结构相似度",
+            "可生成",
+            "提示词审查记录.md",
+        ]:
+            self.assertIn(phrase, short_skill)
+
 
 if __name__ == "__main__":
     unittest.main()
