@@ -23,6 +23,7 @@ class TestModeRouting(unittest.TestCase):
             "config-novel.md",
             "参考素材.txt",
             "拆书记录.md",
+            "总结.md",
             "审查报告.md",
             "正文/第001章_标题.md",
             "一到两万字",
@@ -46,6 +47,19 @@ class TestModeRouting(unittest.TestCase):
 
         self.assertIn("台词润色", short_skill)
         self.assertIn("不能把外部范文改名改词", short_skill)
+
+    def test_short_form_persists_intro_before_summary_and_publication(self):
+        short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")
+        structure = (ROOT / "short-form" / "references" / "项目定位与文件结构.md").read_text(encoding="utf-8")
+
+        summary_ref = (ROOT / "short-form" / "references" / "总结与导语.md").read_text(encoding="utf-8")
+
+        for phrase in ["总结.md", "导语", "第001章", "发布"]:
+            self.assertIn(phrase, short_skill + structure)
+
+        self.assertIn("先写导语，再写内部总结", short_skill)
+        self.assertIn("先写导语，再写内部总结", summary_ref)
+        self.assertIn("放在 `正文/第001章_<标题>.md` 之前", summary_ref)
 
     def test_imported_reference_text_requires_reusable_close_reading_notes(self):
         library = (ROOT / "short-form" / "references" / "类型范文库.md").read_text(encoding="utf-8")
