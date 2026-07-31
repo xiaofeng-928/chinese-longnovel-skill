@@ -47,6 +47,17 @@ class TestModeRouting(unittest.TestCase):
         self.assertIn("台词润色", short_skill)
         self.assertIn("不能把外部范文改名改词", short_skill)
 
+    def test_imported_reference_text_requires_reusable_close_reading_notes(self):
+        library = (ROOT / "short-form" / "references" / "类型范文库.md").read_text(encoding="utf-8")
+        disassembly = (ROOT / "short-form" / "references" / "拆书与重组.md").read_text(encoding="utf-8")
+        context = (ROOT / "short-form" / "references" / "上下文装配.md").read_text(encoding="utf-8")
+
+        for phrase in ["正文补齐后", "精读笔记", "主线压缩", "关键事件链", "人设标签"]:
+            self.assertIn(phrase, library + disassembly)
+
+        self.assertIn("范文库长期资产", disassembly)
+        self.assertIn("正文与精读笔记", context)
+
     def test_short_form_requires_structural_review_before_type_prompt_changes(self):
         short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")
 
