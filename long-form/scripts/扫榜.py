@@ -59,13 +59,38 @@ def analyze(records):
     return candidates
 
 
-def markdown(records, candidates):
-    platforms = sorted({str(item.get("platform", "未注明")) for item in records})
+def scan_date(records):
+    dates = []
+    for item in records:
+        value = item.get("captured_at") or item.get("date")
+        if not value:
+            continue
+        try:
+            dates.append(datetime.fromisoformat(str(value)[:10]).date())
+        except ValueError:
+            continue
+    return max(dates) if dates else date.today()
+
+
+def platform_short(platform):
+    mapping = {
+        "番茄小说": "番茄",
+        "番茄": "番茄",
+        "起点中文网": "起点",
+        "起点": "起点",
+    }
+    return mapping.get(str(platform), str(platform))
+
+
+def markdown(records, candidates, scan_dt=None):
+    scan_dt = scan_dt or scan_date(records)
+    platforms = sorted({platform_short(item.get("platform", "未注明")) for item in records})
+    platform_label = "、".join(platforms) or "未注明"
     lines = [
-        "# 选题决策", "",
+        f"# 扫榜与选题决策（{platform_label}）", "",
         "## 扫榜元数据",
-        f"- 扫榜日期：{date.today().isoformat()}",
-        f"- 平台：{'、'.join(platforms) or '未注明'}",
+        f"- 扫榜日期：{scan_dt.isoformat()}",
+        f"- 平台：{platform_label}",
         f"- 样本数量：{len(records)}",
         f"- 数据新鲜度：{age_label(records)}",
         "- 数据来源：见下方来源表", "",
@@ -92,20 +117,38 @@ def markdown(records, candidates):
         captured = item.get("captured_at", item.get("date", "未注明"))
         confidence = "高" if item.get("source_url") and captured != "未注明" else "低"
         lines.append(f"| {source} | {item.get('platform', '未注明')} | {captured} | {item.get('evidence', '未填写')} | {confidence} |")
+    lines.extend([
+        "", "## 范文候选",
+        "| 作品名 | 平台 | 大类题材 | 细分题材 | 榜单证据 | 来源 URL | 可参考维度 | 正文状态 |",
+        "|---|---|---|---|---|---|---|---|",
+        "| 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待导入 |",
+        "",
+        "> 范文候选由 MyNovel 依据来源表判断填写；只列值得进一步精读的单本作品。",
+        "> 进入候选的作品按范文流程建立元数据范文并标注正文状态，番茄范文候选不得自动获取正文。",
+    ])
     return "\n".join(lines) + "\n"
 
 
 def main():
     parser = argparse.ArgumentParser(description="MyNovel 扫榜数据标准化工具")
     parser.add_argument("--input", required=True, help="JSON 榜单记录")
-    parser.add_argument("--output", help="输出选题决策.md")
+    parser.add_argument("--output", help="输出选题决策.md 的完整路径；缺省时按归档规则自动命名")
+    parser.add_argument("--archive-dir", default=r"D:\ai小说\扫榜归档", help="扫榜归档目录，用于自动命名输出文件")
     parser.add_argument("--format", choices=["json", "markdown"], default="markdown")
     args = parser.parse_args()
     records = load_records(args.input)
     candidates = analyze(records)
-    rendered = markdown(records, candidates)
+    scan_dt = scan_date(records)
+    rendered = markdown(records, candidates, scan_dt)
     if args.output:
         Path(args.output).write_text(rendered, encoding="utf-8")
+    elif args.archive_dir:
+        platforms = sorted({platform_short(item.get("platform", "未注明")) for item in records})
+        platform_label = "、".join(platforms).replace("、", " ") or "未注明"
+        name = f"{scan_dt.isoformat()}_{platform_label}_选题决策.md"
+        out = Path(args.archive_dir) / name
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(rendered, encoding="utf-8")
     payload = {"ok": True, "records": len(records), "freshness": age_label(records), "candidates": candidates[:3]}
     print(rendered if args.format == "markdown" else json.dumps(payload, ensure_ascii=False, indent=2))
 

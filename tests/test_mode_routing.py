@@ -31,12 +31,17 @@ class TestModeRouting(unittest.TestCase):
         ]:
             self.assertIn(phrase, short_skill)
 
-    def test_short_form_keeps_type_rules_out_of_generic_prompt_shims(self):
+    def test_short_form_keeps_type_rules_separate_from_common_ai_polish_prompt(self):
         short_root = ROOT / "short-form"
 
-        self.assertFalse((short_root / "prompts").exists())
+        self.assertTrue((short_root / "prompts" / "去AI润稿提示词.md").is_file())
+        self.assertTrue((short_root / "references" / "去AI润稿流程.md").is_file())
         self.assertTrue((short_root / "references" / "上下文装配.md").is_file())
-        self.assertIn("<作品类型>/提示词/创作提示词.md", (short_root / "SKILL.md").read_text(encoding="utf-8"))
+        short_skill = (short_root / "SKILL.md").read_text(encoding="utf-8")
+        common_prompt = (short_root / "prompts" / "去AI润稿提示词.md").read_text(encoding="utf-8")
+        self.assertIn("<作品类型>/提示词/创作提示词.md", short_skill)
+        self.assertIn("类型提示词", common_prompt)
+        self.assertIn("不把所有短篇统一改成一种", common_prompt)
 
     def test_short_form_routes_reference_disassembly_before_outline(self):
         short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")

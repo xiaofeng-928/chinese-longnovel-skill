@@ -10,6 +10,24 @@ def read_doc(relative_path):
     return (LONG_ROOT / relative_path).read_text(encoding="utf-8")
 
 
+class TestDraftWordCountDocs(unittest.TestCase):
+    def test_generation_targets_2200_to_3000_and_review_keeps_2000_floor(self):
+        skill = read_doc("SKILL.md")
+        outline = read_doc("prompts/大纲生成提示词.md")
+        stage_outline = read_doc("prompts/分阶段大纲细化提示词.md")
+        generation = read_doc("prompts/草稿生成提示词.md")
+        workflow = read_doc("references/草稿生成流程.md")
+        review = read_doc("prompts/草稿审查提示词.md")
+
+        for doc in [skill, outline, stage_outline, generation, workflow]:
+            self.assertIn("2200-3000字", doc.replace(" ", ""))
+
+        self.assertIn("scripts/count_chars.py", workflow)
+        self.assertIn("实际字数进入2200-3000字前，不得更新总结或进入下一章", workflow)
+        self.assertIn("低于2000字则报为B2问题", review)
+        self.assertNotIn("低于2200字则报为B2问题", review)
+
+
 class TestStageOutlineMemorySyncDocs(unittest.TestCase):
     def test_skill_defines_single_character_authority(self):
         skill = read_doc("SKILL.md")
@@ -359,6 +377,168 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, project)
 
 
+class TestStyleDistillationContracts(unittest.TestCase):
+    def test_skill_routes_three_style_workflows(self):
+        skill = read_doc("SKILL.md")
+
+        for phrase in [
+            "文风蒸馏",
+            "项目文风确定",
+            "文风校准",
+            "references/文风蒸馏与执行流程.md",
+            "prompts/文风蒸馏提示词.md",
+            "prompts/项目文风编译提示词.md",
+        ]:
+            self.assertIn(phrase, skill)
+
+    def test_source_dir_defines_all_style_assets(self):
+        workflow = read_doc("references/范文拆书与仿写流程.md")
+
+        for phrase in [
+            "文风统计报告.md",
+            "文风分析报告.md",
+            "文风基因.md",
+            "拆书与文风蒸馏分离",
+            "文风状态",
+            "待重蒸馏",
+        ]:
+            self.assertIn(phrase, workflow)
+
+    def test_project_style_spec_is_unique_execution_authority(self):
+        structure = read_doc("references/文件结构与锚点.md")
+        reference = read_doc("references/文风蒸馏与执行流程.md")
+
+        for phrase in [
+            "文风/项目文风规范.md",
+            "唯一执行权威",
+            "文风校准记录.md",
+            "文风配置",
+            "文风变更规则",
+        ]:
+            self.assertIn(phrase, structure + reference)
+
+    def test_context_assembly_reads_project_style_and_blocks_source(self):
+        context = read_doc("references/上下文组装.md")
+
+        for phrase in [
+            "文风/项目文风规范.md",
+            "文风执行表",
+            "禁止把范文 `正文.txt`",
+            "文风分析报告",
+        ]:
+            self.assertIn(phrase, context)
+
+    def test_draft_prompts_include_style_version_and_character_priority(self):
+        docs = [
+            read_doc("prompts/草稿生成提示词.md"),
+            read_doc("prompts/草稿审查提示词.md"),
+            read_doc("prompts/草稿自动修复提示词.md"),
+        ]
+        for doc in docs:
+            self.assertIn("项目文风规范", doc)
+            self.assertIn("性格规格卡", doc)
+        self.assertIn("本章文风执行表", read_doc("prompts/草稿生成提示词.md"))
+        self.assertIn("文风执行核对", read_doc("prompts/草稿审查提示词.md"))
+
+    def test_review_reports_style_check_block(self):
+        prompt = read_doc("prompts/草稿审查提示词.md")
+        for phrase in [
+            "## 文风执行核对",
+            "项目文风版本",
+            "场景模式匹配",
+            "硬规则",
+            "软倾向整体一致性",
+            "角色声音优先级",
+            "原文重合检查",
+        ]:
+            self.assertIn(phrase, prompt)
+
+    def test_outline_and_golden_three_consume_project_style(self):
+        outline = read_doc("prompts/大纲生成提示词.md")
+        stage = read_doc("prompts/分阶段大纲细化提示词.md")
+        golden = read_doc("prompts/黄金三章微操细纲提示词.md")
+
+        for phrase in ["项目文风规范"]:
+            self.assertIn(phrase, outline)
+            self.assertIn(phrase, stage)
+            self.assertIn(phrase, golden)
+        self.assertIn("场景文风模式", stage)
+
+    def test_teardown_prompt_does_not_generate_style_gene_inline(self):
+        prompt = read_doc("prompts/拆书与仿写提示词.md")
+        for phrase in ["不顺带生成文风基因", "文风蒸馏", "文风蒸馏提示词.md"]:
+            self.assertIn(phrase, prompt)
+
+    def test_all_style_docs_forbid_identity_imitation_and_source_reuse(self):
+        reference = read_doc("references/文风蒸馏与执行流程.md")
+        distill = read_doc("prompts/文风蒸馏提示词.md")
+        compile_prompt = read_doc("prompts/项目文风编译提示词.md")
+
+        for doc in [reference, distill, compile_prompt]:
+            self.assertIn("化身作者", doc)
+            self.assertIn("原句", doc)
+        self.assertIn("不包含来源原句", compile_prompt)
+
+    def test_style_docs_declare_short_form_out_of_scope(self):
+        reference = read_doc("references/文风蒸馏与执行流程.md")
+        distill = read_doc("prompts/文风蒸馏提示词.md")
+        compile_prompt = read_doc("prompts/项目文风编译提示词.md")
+
+        for doc in [reference, distill, compile_prompt]:
+            self.assertIn("短篇", doc)
+
+    def test_script_contract_documents_new_scripts(self):
+        contract = read_doc("references/自动化脚本契约.md")
+        for phrase in ["文风统计.py", "原文重合检查.py", "阻断", "需复核", "白名单"]:
+            self.assertIn(phrase, contract)
+
+    def test_short_form_untouched_by_style_contract(self):
+        short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn("项目文风规范", short_skill)
+        self.assertNotIn("文风基因", short_skill)
+
+
+class TestAIPolishContracts(unittest.TestCase):
+    def test_long_form_routes_ai_polish_between_draft_and_review(self):
+        skill = read_doc("SKILL.md")
+        flow = read_doc("references/去AI润稿流程.md")
+        prompt = read_doc("prompts/去AI润稿提示词.md")
+
+        for phrase in [
+            "去 AI 润稿",
+            "草稿创作",
+            "正式草稿审查",
+            "去AI润稿流程.md",
+            "去AI润稿提示词.md",
+        ]:
+            self.assertIn(phrase, skill + flow)
+        for phrase in [
+            "事实锁",
+            "自动判断章节功能",
+            "文学滤镜",
+            "对话前摇",
+            "无功能环境",
+            "不新增、删除、合并或调换事件",
+            "默认只输出修改后的完整正文",
+        ]:
+            self.assertIn(phrase, prompt)
+        self.assertIn("仍是“待正式审查的草稿”", flow)
+        self.assertIn("修复记录/去AI润稿备份", flow)
+
+    def test_short_form_has_common_ai_polish_layer_without_replacing_type_rules(self):
+        short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")
+        prompt = (ROOT / "short-form" / "prompts" / "去AI润稿提示词.md").read_text(encoding="utf-8")
+
+        for phrase in ["去 AI 润稿", "类型提示词", "审查提示词.md", "自然化"]:
+            self.assertIn(phrase, short_skill)
+        for phrase in ["文学滤镜", "对话前摇", "无功能环境", "诊断模式", "润稿模式", "不新增、删除、合并或调换"]:
+            self.assertIn(phrase, prompt)
+
+    def test_root_trigger_mentions_ai_polish(self):
+        root = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("去 AI 润稿", root)
+
+
 class TestGoldfingerDesignContracts(unittest.TestCase):
     def test_total_outline_requires_operating_dossier(self):
         prompt = read_doc("prompts/大纲生成提示词.md")
@@ -411,6 +591,105 @@ class TestGoldfingerDesignContracts(unittest.TestCase):
         for doc in docs:
             self.assertIn("金手指设计档案", doc)
             self.assertIn("金手指闭环", doc)
+
+
+class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
+    def test_skill_routes_design_and_stage_planning(self):
+        skill = read_doc("SKILL.md")
+        for phrase in [
+            "金手指设计/重构",
+            "金手指阶段规划",
+            "references/金手指设计与运营.md",
+            "prompts/金手指设计提示词.md",
+            "prompts/金手指阶段规划提示词.md",
+            "plan/金手指发展_第X-Y章.md",
+        ]:
+            self.assertIn(phrase, skill)
+
+    def test_design_prompt_makes_ai_propose_and_stress_test(self):
+        prompt = read_doc("prompts/金手指设计提示词.md")
+        for phrase in [
+            "2-3套",
+            "推荐方案",
+            "压力测试",
+            "用户校准",
+            "机制画像",
+            "成长拓扑",
+            "经济健康",
+            "任务合理性闸门",
+            "写回 `novel-config.md`",
+        ]:
+            self.assertIn(phrase, prompt)
+
+    def test_reference_defines_task_engine_and_store_boundaries(self):
+        reference = read_doc("references/金手指设计与运营.md")
+        for phrase in [
+            "小说类型与金手指机制正交",
+            "系统商店",
+            "主角经营商店",
+            "任务生成链",
+            "任务合理性闸门",
+            "主角能动性",
+            "全知任务",
+            "救场任务",
+            "追溯奖励",
+        ]:
+            self.assertIn(phrase, reference)
+
+    def test_stage_plan_owns_store_task_and_five_chapter_cycle(self):
+        prompt = read_doc("prompts/金手指阶段规划提示词.md")
+        for phrase in [
+            "资源预算",
+            "系统商店快照",
+            "经营商店快照",
+            "阶段任务池",
+            "感知来源",
+            "奖励预算",
+            "五章玩法循环",
+            "战略跃升",
+            "plan/金手指发展_第X-Y章.md",
+        ]:
+            self.assertIn(phrase, prompt)
+
+    def test_stage_outline_consumes_goldfinger_stage_plan(self):
+        prompt = read_doc("prompts/分阶段大纲细化提示词.md")
+        for phrase in [
+            "同范围金手指阶段规划",
+            "系统任务交互",
+            "金手指决策",
+            "商店状态变化",
+            "任务状态",
+            "下一轮期待",
+        ]:
+            self.assertIn(phrase, prompt)
+
+    def test_context_and_summary_support_optional_separate_repository(self):
+        context = read_doc("references/上下文组装.md")
+        repository = read_doc("references/主角状态仓库.md")
+        summary = read_doc("references/总结流程.md")
+        structure = read_doc("references/文件结构与锚点.md")
+        for doc in [context, repository, summary, structure]:
+            self.assertIn("总结/金手指状态仓库.md", doc)
+        self.assertIn("任意两项", repository)
+        self.assertIn("禁止双重权威", repository)
+
+    def test_draft_review_detects_task_and_choice_failures(self):
+        generation = read_doc("prompts/草稿生成提示词.md")
+        review = read_doc("prompts/草稿审查提示词.md")
+        repair = read_doc("prompts/草稿自动修复提示词.md")
+        for phrase in ["任务感知来源", "主角选择", "场景化结算"]:
+            self.assertIn(phrase, generation)
+        for phrase in [
+            "虚假选择",
+            "全知任务",
+            "救场任务",
+            "追溯奖励",
+            "判定漂移",
+            "木偶驱动",
+        ]:
+            self.assertIn(phrase, review)
+        self.assertIn("structural", repair)
+        self.assertIn("退回金手指阶段规划", repair)
 
 
 class TestProtagonistStateRepositoryContracts(unittest.TestCase):

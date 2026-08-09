@@ -213,5 +213,246 @@ class TestRankScan(unittest.TestCase):
         self.assertIn("选题决策", output_path.read_text(encoding="utf-8"))
 
 
+STYLE_TEXT = """第1章 永夜
+
+夜色沉沉，远处有狗在叫。他听见了，但是没有动。
+
+“你来了。”那人说。
+他点点头，默默抽出一根烟。
+
+第二日清晨，他去镇上换了一袋米。
+“这米不错。”老板说道。
+“能吃饱就行。”他答。
+
+第2章 火泉
+
+天亮了。风从山谷里灌进来。
+他站在火堆边，把冻僵的手指烤暖。
+
+“再等一天。”他对自己说。
+山道上的雪还没有化，走不得。
+"""
+
+STYLE_INDEX = """# 《测试》章节索引
+
+| 序号 | 标题 | 章节ID | 正文来源 | 访问日期 | 字数 |
+|---:|---|---|---|---|---:|
+| 1 | 第1章 永夜 | 1 | test | 2026-08-09 | 200 |
+| 2 | 第2章 火泉 | 2 | test | 2026-08-09 | 200 |
+"""
+
+
+class TestStyleStats(unittest.TestCase):
+    def write_text(self, content):
+        temp_dir = tempfile.TemporaryDirectory()
+        path = Path(temp_dir.name) / "测试正文.txt"
+        path.write_text(content, encoding="utf-8")
+        self.addCleanup(temp_dir.cleanup)
+        return path
+
+    def make_fixture(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        text_path = Path(temp_dir.name) / "测试正文.txt"
+        index_path = Path(temp_dir.name) / "测试索引.md"
+        text_path.write_text(STYLE_TEXT, encoding="utf-8")
+        index_path.write_text(STYLE_INDEX, encoding="utf-8")
+        return text_path, index_path
+
+    def test_profile_outputs_core_stats(self):
+        text_path, index_path = self.make_fixture()
+        data = run_script("文风统计.py", "profile", "--text", str(text_path), "--index", str(index_path))
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["total"]["chapters"], 2)
+        self.assertGreater(data["total"]["chars"], 0)
+        self.assertGreater(data["total"]["sentences"], 0)
+        self.assertGreater(data["total"]["paragraphs"], 0)
+
+    def test_chinese_quote_dialogue_ratio(self):
+        text_path, index_path = self.make_fixture()
+        data = run_script("文风统计.py", "profile", "--text", str(text_path), "--index", str(index_path))
+        self.assertGreater(data["total"]["dialogue_ratio"], 0)
+
+    def test_ellipsis_and_dash_counts(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        text_path = Path(temp_dir.name) / "测试正文.txt"
+        index_path = Path(temp_dir.name) / "测试索引.md"
+        text_path.write_text("第1章 始\n\n他想了想……再想想……\n\n他走了——头也不回——\n", encoding="utf-8")
+        index_path.write_text("| 序号 | 标题 | 章节ID | 正文来源 | 访问日期 | 字数 |\n|---:|---|---|---|---|---:|\n| 1 | 第1章 始 | 1 | test | 2026-08-09 | 100 |\n", encoding="utf-8")
+        data = run_script("文风统计.py", "profile", "--text", str(text_path), "--index", str(index_path))
+        punct = data["punctuation"]
+        self.assertGreater(punct["……"], 0)
+        self.assertGreater(punct["——"], 0)
+
+    def test_empty_paragraphs_and_headings_excluded_from_paragraph_count(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        text_path = Path(temp_dir.name) / "测试正文.txt"
+        index_path = Path(temp_dir.name) / "测试索引.md"
+        text_path.write_text("第1章 始\n\n\n第一段。\n\n\n第二段。\n\n", encoding="utf-8")
+        index_path.write_text("| 序号 | 标题 | 章节ID | 正文来源 | 访问日期 | 字数 |\n|---:|---|---|---|---|---:|\n| 1 | 第1章 始 | 1 | test | 2026-08-09 | 50 |\n", encoding="utf-8")
+        data = run_script("文风统计.py", "profile", "--text", str(text_path), "--index", str(index_path))
+        self.assertEqual(data["total"]["paragraphs"], 2)
+
+    def test_multi_chapter_selection(self):
+        text_path, index_path = self.make_fixture()
+        data = run_script("文风统计.py", "profile", "--text", str(text_path), "--index", str(index_path), "--chapters", "1")
+        self.assertEqual(data["total"]["chapters"], 1)
+        self.assertEqual(data["chapters"][0]["number"], 1)
+
+    def test_sentence_and_paragraph_quantiles(self):
+        text_path, index_path = self.make_fixture()
+        data = run_script("文风统计.py", "profile", "--text", str(text_path), "--index", str(index_path))
+        for bucket in [data["sentence_lengths"], data["paragraph_lengths"]]:
+            for key in ["mean", "p25", "median", "p75", "p90"]:
+                self.assertIn(key, bucket)
+                self.assertGreaterEqual(bucket[key], 0)
+
+    def test_utf8_chinese_path(self):
+        text_path, index_path = self.make_fixture()
+        data = run_script("文风统计.py", "profile", "--text", str(text_path), "--index", str(index_path))
+        self.assertTrue(data["ok"])
+
+    def test_empty_text_fails(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        text_path = Path(temp_dir.name) / "测试正文.txt"
+        index_path = Path(temp_dir.name) / "测试索引.md"
+        text_path.write_text("", encoding="utf-8")
+        index_path.write_text(STYLE_INDEX, encoding="utf-8")
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS / "文风统计.py"), "profile", "--text", str(text_path), "--index", str(index_path)],
+            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        data = json.loads(completed.stdout)
+        self.assertFalse(data["ok"])
+
+    def test_missing_index_fails(self):
+        text_path, _ = self.make_fixture()
+        missing = Path(text_path.parent) / "不存在.md"
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS / "文风统计.py"), "profile", "--text", str(text_path), "--index", str(missing)],
+            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+
+    def test_nonexistent_chapter_fails(self):
+        text_path, index_path = self.make_fixture()
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS / "文风统计.py"), "profile", "--text", str(text_path), "--index", str(index_path), "--chapters", "99"],
+            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+
+
+class TestOverlapCheck(unittest.TestCase):
+    def write_files(self, draft, source):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        draft_path = Path(temp_dir.name) / "测试草稿.txt"
+        source_path = Path(temp_dir.name) / "测试来源.txt"
+        draft_path.write_text(draft, encoding="utf-8")
+        source_path.write_text(source, encoding="utf-8")
+        return draft_path, source_path
+
+    def run_check(self, draft, source, extra=None):
+        draft_path, source_path = self.write_files(draft, source)
+        cmd = [sys.executable, str(SCRIPTS / "原文重合检查.py"), "check", "--draft", str(draft_path), "--source", str(source_path)]
+        if extra:
+            cmd.extend(extra)
+        completed = subprocess.run(cmd, cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        return json.loads(completed.stdout)
+
+    def test_reports_both_punctuation_scopes(self):
+        source = "夜色沉沉，远处有狗在叫。他听见了，但是没有动。你来了。那人说。"
+        draft = "夜色沉沉，远处有狗在叫。他听见了，但是没有动。你来了。那人说。"
+        data = self.run_check(draft, source)
+        scopes = {item["scope"] for item in data["findings"]}
+        self.assertEqual(scopes, {"with_punct", "without_punct"})
+
+    def test_threshold_boundaries(self):
+        base = "一二三四五六七八九十甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥"
+        for length, expected in [(16, "需复核"), (23, "需复核"), (24, "阻断")]:
+            source = "开场" + base[:length] + "收尾"
+            draft = base[:length]
+            data = self.run_check(draft, source)
+            wp = [item for item in data["findings"] if item["scope"] == "with_punct"]
+            self.assertTrue(wp, f"no with_punct finding for length {length}")
+            self.assertEqual(wp[0]["length"], length)
+            self.assertEqual(wp[0]["severity"], expected)
+
+    def test_multi_source(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        draft_path = Path(temp_dir.name) / "测试草稿.txt"
+        source_a = Path(temp_dir.name) / "测试来源A.txt"
+        source_b = Path(temp_dir.name) / "测试来源B.txt"
+        base = "一二三四五六七八九十甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥"
+        draft_path.write_text(base[:20], encoding="utf-8")
+        source_a.write_text("A开头" + base[:16], encoding="utf-8")
+        source_b.write_text("B开头" + base[2:22], encoding="utf-8")
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS / "原文重合检查.py"), "check", "--draft", str(draft_path), "--source", str(source_a), "--source", str(source_b)],
+            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        data = json.loads(completed.stdout)
+        self.assertEqual(data["summary"]["sources"], 2)
+        self.assertEqual({item["source_index"] for item in data["findings"]}, {0, 1})
+
+    def test_whitelist_exempts(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        draft_path = Path(temp_dir.name) / "测试草稿.txt"
+        source_path = Path(temp_dir.name) / "测试来源.txt"
+        whitelist_path = Path(temp_dir.name) / "白名单.txt"
+        base = "一二三四五六七八九十甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥"
+        draft_path.write_text(base[:20], encoding="utf-8")
+        source_path.write_text("前缀" + base[:20], encoding="utf-8")
+        whitelist_path.write_text("# 白名单\n一二三四五六七八九十甲乙丙丁戊己庚辛壬癸\n", encoding="utf-8")
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS / "原文重合检查.py"), "check", "--draft", str(draft_path), "--source", str(source_path), "--whitelist", str(whitelist_path)],
+            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        data = json.loads(completed.stdout)
+        self.assertGreaterEqual(len(data["exempted"]), 1)
+        self.assertLessEqual(len(data["findings"]), 2)
+
+    def test_short_overlap_reports_only_when_repeated(self):
+        base13 = "一二三四五六七八九十一二三"
+        source_single = "前缀" + base13
+        draft = "前缀" + base13
+        data_single = self.run_check(draft, source_single)
+        short_wp = [item for item in data_single["findings"] if item["scope"] == "with_punct" and item["length"] <= 15]
+        self.assertEqual(short_wp, [], "unique short overlap should not be reported")
+
+        source_repeat = "AAA" + base13 + "BBB" + base13
+        data_repeat = self.run_check(draft, source_repeat)
+        short_wp_repeat = [item for item in data_repeat["findings"] if item["scope"] == "with_punct" and item["length"] <= 15]
+        self.assertTrue(short_wp_repeat, "repeated short overlap should be reported")
+
+    def test_positions_are_locatable(self):
+        source = "夜色沉沉，远处有狗在叫。他听见了，但是没有动。你来了。那人说。"
+        draft = "夜色沉沉，远处有狗在叫。他听见了，但是没有动。你来了。那人说。"
+        data = self.run_check(draft, source)
+        for item in data["findings"]:
+            self.assertIn("draft_position", item)
+            self.assertIn("source_position", item)
+            self.assertIn("original_start", item["draft_position"])
+            self.assertIn("original_end", item["draft_position"])
+            self.assertIn("original_start", item["source_position"])
+            self.assertIn("original_end", item["source_position"])
+
+    def test_utf8_chinese_path(self):
+        source = "夜色沉沉，远处有狗在叫。他听见了，但是没有动。"
+        draft = "夜色沉沉，远处有狗在叫。他听见了，但是没有动。"
+        data = self.run_check(draft, source)
+        self.assertTrue(data["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()
