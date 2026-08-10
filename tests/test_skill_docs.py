@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,40 @@ def read_doc(relative_path):
     return (LONG_ROOT / relative_path).read_text(encoding="utf-8")
 
 
+class TestLongFormEntryBoundary(unittest.TestCase):
+    def test_entry_stays_a_router_instead_of_a_domain_rule_dump(self):
+        skill = read_doc("SKILL.md")
+
+        self.assertLessEqual(len(skill.splitlines()), 120)
+        for phrase in [
+            "入口只定义路由、全局不变量和执行边界",
+            "不得把单一题材、金手指、文风、角色、状态仓库或某一生产阶段的细则追加到入口",
+            "`references/` 是流程、状态权威关系和领域硬约束的唯一说明层",
+        ]:
+            self.assertIn(phrase, skill)
+
+        for detail in [
+            "2200-3000",
+            "第51-100章细纲审查通过后",
+            "总结/主角状态仓库.md",
+            "正文状态：待导入",
+            "待重蒸馏",
+            "只有设计档案明确存在任务引擎",
+        ]:
+            self.assertNotIn(detail, skill)
+
+    def test_every_routed_resource_exists(self):
+        skill = read_doc("SKILL.md")
+        paths = set(re.findall(r"`((?:references|prompts)/[^`]+\.md)`", skill))
+
+        self.assertGreater(len(paths), 20)
+        for relative_path in paths:
+            self.assertTrue(
+                (LONG_ROOT / Path(relative_path)).is_file(),
+                f"Missing routed resource: {relative_path}",
+            )
+
+
 class TestDraftWordCountDocs(unittest.TestCase):
     def test_generation_targets_2200_to_3000_and_review_keeps_2000_floor(self):
         skill = read_doc("SKILL.md")
@@ -19,9 +54,10 @@ class TestDraftWordCountDocs(unittest.TestCase):
         workflow = read_doc("references/草稿生成流程.md")
         review = read_doc("prompts/草稿审查提示词.md")
 
-        for doc in [skill, outline, stage_outline, generation, workflow]:
+        for doc in [outline, stage_outline, generation, workflow]:
             self.assertIn("2200-3000字", doc.replace(" ", ""))
 
+        self.assertNotIn("2200-3000", skill)
         self.assertIn("scripts/count_chars.py", workflow)
         self.assertIn("实际字数进入2200-3000字前，不得更新总结或进入下一章", workflow)
         self.assertIn("低于2000字则报为B2问题", review)
@@ -29,17 +65,20 @@ class TestDraftWordCountDocs(unittest.TestCase):
 
 
 class TestStageOutlineMemorySyncDocs(unittest.TestCase):
-    def test_skill_defines_single_character_authority(self):
+    def test_project_reference_defines_single_character_authority(self):
         skill = read_doc("SKILL.md")
+        project = read_doc("references/项目定位.md")
 
         for phrase in [
             "细纲审查通过后",
-            "角色画像默认只写回 `novel-config.md`",
+            "角色卡、反派画像、称谓辈分和禁写清单写入 `novel-config.md`",
             "总大纲只在阶段目标、主线/反派线、伏笔追踪或下阶段铺垫发生变化时更新",
             "写回",
         ]:
-            self.assertIn(phrase, skill)
+            self.assertIn(phrase, project)
 
+        self.assertIn("分阶段大纲细化", skill)
+        self.assertNotIn("第51-100章细纲审查通过后", skill)
         self.assertNotIn("总大纲对应角色规划卡", skill)
 
     def test_stage_outline_prompt_routes_character_and_plot_sync_separately(self):
@@ -69,7 +108,7 @@ class TestStageOutlineMemorySyncDocs(unittest.TestCase):
             self.assertIn(phrase, structure)
 
     def test_stage_outline_review_requires_prior_48_outline_cleanup(self):
-        skill = read_doc("SKILL.md")
+        project = read_doc("references/项目定位.md")
         prompt = read_doc("prompts/分阶段大纲细化提示词.md")
 
         for phrase in [
@@ -78,7 +117,7 @@ class TestStageOutlineMemorySyncDocs(unittest.TestCase):
             "第49-50章",
             "边界未写章节细纲",
         ]:
-            self.assertIn(phrase, skill)
+            self.assertIn(phrase, project)
             self.assertIn(phrase, prompt)
 
     def test_config_compresses_only_dead_or_offline_characters(self):
@@ -166,18 +205,28 @@ class TestWorkflowContractDocs(unittest.TestCase):
         ]:
             self.assertIn(phrase, workflow + outline)
 
-    def test_partial_example_defaults_to_50_and_stops_before_first_paid_chapter(self):
+    def test_qidian_defaults_to_all_free_chapters_before_paid_boundary(self):
         workflow = read_doc("references/范文拆书与仿写流程.md")
+        prompt = read_doc("prompts/拆书与仿写提示词.md")
 
         for phrase in [
-            "默认获取第1-50章",
+            "起点官方公开章节默认连续获取到第一章完整收费正文之前",
+            "不设 50 章下载上限",
             "第一章完整收费正文",
             "最后一章完整免费正文",
             "第39章开始收费",
             "第1-38章",
             "不得绕过登录、风控、订阅或付费限制",
         ]:
-            self.assertIn(phrase, workflow)
+            self.assertIn(phrase, workflow + prompt)
+
+        self.assertNotIn("默认最多保存第1-50章", workflow)
+
+    def test_other_partial_sources_keep_a_bounded_default_range(self):
+        workflow = read_doc("references/范文拆书与仿写流程.md")
+
+        self.assertIn("其他局部正文来源未约定范围时，默认规范化连续第1-50章", workflow)
+        self.assertIn("默认分析范围仍为连续第1-50章", workflow)
 
     def test_qidian_chapter_acquisition_uses_official_mobile_pages_and_access_markers(self):
         workflow = read_doc("references/范文拆书与仿写流程.md")
@@ -191,6 +240,9 @@ class TestWorkflowContractDocs(unittest.TestCase):
             "price",
             "isBuy",
             "正文完整性",
+            "直到首个收费边界或全书目录结束",
+            "上架感言、请假条、公告、成绩汇报",
+            "不写入 `正文.txt` 或 `章节索引.md`",
         ]:
             self.assertIn(phrase, workflow)
 
@@ -256,13 +308,15 @@ class TestWorkflowContractDocs(unittest.TestCase):
         ]:
             self.assertIn(phrase, workflow + prompt)
 
-    def test_full_source_is_preserved_while_default_analysis_stays_at_50(self):
+    def test_large_import_is_preserved_while_default_analysis_stays_at_50(self):
         workflow = read_doc("references/范文拆书与仿写流程.md")
 
         for phrase in [
-            "完整导入不等于全文分析",
-            "不得截断或删除第51章以后的原始内容",
+            "完整入库不等于全文分析",
+            "不得因默认分析范围而截断或删除第51章以后的内容",
             "默认分析范围仍为连续第1-50章",
+            "已入库范围",
+            "实际分析范围",
         ]:
             self.assertIn(phrase, workflow)
 
@@ -323,7 +377,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
         context = read_doc("references/上下文组装.md")
 
         for doc, phrases in [
-            (skill, ["细纲整理", "正式细纲", "即使尚未审查，也必须作为有效历史正文参与上下文"]),
+            (skill, ["细纲整理", "references/细纲整理流程.md"]),
             (prompt, ["不使用“草稿”", "不得擅自新增主要事件", "事件展开"]),
             (process, ["不重新规划主线", "正文和上下文组装直接读取"]),
             (sequence, ["第49(1)章", "最近 3 个有效节点", "最近 1 个“主线锚点”"]),
@@ -338,11 +392,13 @@ class TestWorkflowContractDocs(unittest.TestCase):
         prompt = read_doc("prompts/分阶段大纲细化提示词.md")
         readme = read_doc("README.md")
 
-        for doc in [skill, project, prompt]:
+        for doc in [project, prompt]:
             self.assertIn("第1-50章", doc)
             self.assertIn("黄金三章微操细纲", doc)
             self.assertIn("先生成", doc)
 
+        self.assertIn("黄金三章微操细纲", skill)
+        self.assertNotIn("第1-50章常规分阶段细纲", skill)
         self.assertNotIn("黄金三章微操细纲（可选）", readme)
 
     def test_readme_uses_five_chapter_execution_limit(self):
@@ -499,31 +555,27 @@ class TestStyleDistillationContracts(unittest.TestCase):
 
 
 class TestAIPolishContracts(unittest.TestCase):
-    def test_long_form_routes_ai_polish_between_draft_and_review(self):
+    def test_long_form_generates_without_independent_ai_polish_stage(self):
         skill = read_doc("SKILL.md")
-        flow = read_doc("references/去AI润稿流程.md")
-        prompt = read_doc("prompts/去AI润稿提示词.md")
+        flow = read_doc("references/草稿生成流程.md")
+        prompt = read_doc("prompts/草稿生成提示词.md")
 
         for phrase in [
-            "去 AI 润稿",
-            "草稿创作",
-            "正式草稿审查",
-            "去AI润稿流程.md",
-            "去AI润稿提示词.md",
+            "去 AI 味是正文生成的固有约束",
+            "不另设生成后二次润稿阶段",
+            "修复 AI 味或文风偏移",
         ]:
-            self.assertIn(phrase, skill + flow)
+            self.assertIn(phrase, skill)
         for phrase in [
-            "事实锁",
-            "自动判断章节功能",
-            "文学滤镜",
-            "对话前摇",
-            "无功能环境",
-            "不新增、删除、合并或调换事件",
-            "默认只输出修改后的完整正文",
+            "去AI味约束",
+            "不是事后二次加工的补救项",
+            "从下笔那一刻起",
+            "字数守恒红线",
         ]:
             self.assertIn(phrase, prompt)
-        self.assertIn("仍是“待正式审查的草稿”", flow)
-        self.assertIn("修复记录/去AI润稿备份", flow)
+        self.assertIn("正式草稿审查", flow)
+        self.assertFalse((LONG_ROOT / "references" / "去AI润稿流程.md").exists())
+        self.assertFalse((LONG_ROOT / "prompts" / "去AI润稿提示词.md").exists())
 
     def test_short_form_has_common_ai_polish_layer_without_replacing_type_rules(self):
         short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")
@@ -586,7 +638,6 @@ class TestGoldfingerDesignContracts(unittest.TestCase):
             read_doc("prompts/草稿生成提示词.md"),
             read_doc("prompts/草稿审查提示词.md"),
             read_doc("prompts/草稿自动修复提示词.md"),
-            read_doc("SKILL.md"),
         ]
         for doc in docs:
             self.assertIn("金手指设计档案", doc)
@@ -596,15 +647,17 @@ class TestGoldfingerDesignContracts(unittest.TestCase):
 class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
     def test_skill_routes_design_and_stage_planning(self):
         skill = read_doc("SKILL.md")
+        reference = read_doc("references/金手指设计与运营.md")
+        prompt = read_doc("prompts/金手指阶段规划提示词.md")
         for phrase in [
             "金手指设计/重构",
             "金手指阶段规划",
             "references/金手指设计与运营.md",
             "prompts/金手指设计提示词.md",
             "prompts/金手指阶段规划提示词.md",
-            "plan/金手指发展_第X-Y章.md",
         ]:
             self.assertIn(phrase, skill)
+        self.assertIn("plan/金手指发展_第X-Y章.md", reference + prompt)
 
     def test_design_prompt_makes_ai_propose_and_stress_test(self):
         prompt = read_doc("prompts/金手指设计提示词.md")
