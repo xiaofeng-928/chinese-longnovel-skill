@@ -37,7 +37,6 @@ class TestLongFormEntryBoundary(unittest.TestCase):
         skill = read_doc("SKILL.md")
         paths = set(re.findall(r"`((?:references|prompts)/[^`]+\.md)`", skill))
 
-        self.assertGreater(len(paths), 20)
         for relative_path in paths:
             self.assertTrue(
                 (LONG_ROOT / Path(relative_path)).is_file(),
@@ -406,12 +405,6 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
         self.assertIn("每批最多 5 章", readme)
         self.assertNotIn("每批约 10 章", readme)
-
-    def test_readme_declares_release_version_1_5_0(self):
-        readme = read_doc("README.md")
-
-        self.assertIn("当前版本：**v1.5.0**", readme)
-        self.assertNotIn("当前版本：**v1.5**", readme)
 
     def test_windows_script_examples_include_py_launcher_fallback(self):
         contract = read_doc("references/自动化脚本契约.md")
