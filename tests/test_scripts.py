@@ -7,15 +7,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LONG_ROOT = ROOT / "long-form"
-SCRIPTS = LONG_ROOT / "scripts"
+SCRIPTS = ROOT / "scripts"
 
 
 def run_script(script_name, *args):
     cmd = [sys.executable, str(SCRIPTS / script_name)] + list(args)
     completed = subprocess.run(
         cmd,
-        cwd=str(LONG_ROOT),
+        cwd=str(ROOT),
         text=True,
         encoding="utf-8",
         stdout=subprocess.PIPE,
@@ -134,7 +133,7 @@ class TestNovelLint(unittest.TestCase):
         )
         completed = subprocess.run(
             [sys.executable, str(lint_script), "lint", "--file", str(text_path)],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8",
+            cwd=str(ROOT), text=True, encoding="utf-8",
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -161,7 +160,7 @@ class TestNovelLint(unittest.TestCase):
                 sys.executable, str(lint_script), "lint", "--file", str(text_path),
                 "--forbidden-words", str(forbidden_path),
             ],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8",
+            cwd=str(ROOT), text=True, encoding="utf-8",
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -181,7 +180,7 @@ class TestCountChars(unittest.TestCase):
         lint_data = run_script("小说质检.py", "lint", "--file", str(text_path))
         cc_data = subprocess.run(
             [sys.executable, str(SCRIPTS / "count_chars.py"), str(text_path)],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8",
+            cwd=str(ROOT), text=True, encoding="utf-8",
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(cc_data.returncode, 0)
@@ -204,7 +203,7 @@ class TestRankScan(unittest.TestCase):
         ], ensure_ascii=False), encoding="utf-8")
         completed = subprocess.run(
             [sys.executable, str(SCRIPTS / "扫榜.py"), "--input", str(input_path), "--output", str(output_path), "--format", "json"],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=str(ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         data = json.loads(completed.stdout)
@@ -323,7 +322,7 @@ class TestStyleStats(unittest.TestCase):
         index_path.write_text(STYLE_INDEX, encoding="utf-8")
         completed = subprocess.run(
             [sys.executable, str(SCRIPTS / "文风统计.py"), "profile", "--text", str(text_path), "--index", str(index_path)],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=str(ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertNotEqual(completed.returncode, 0)
         data = json.loads(completed.stdout)
@@ -334,7 +333,7 @@ class TestStyleStats(unittest.TestCase):
         missing = Path(text_path.parent) / "不存在.md"
         completed = subprocess.run(
             [sys.executable, str(SCRIPTS / "文风统计.py"), "profile", "--text", str(text_path), "--index", str(missing)],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=str(ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertNotEqual(completed.returncode, 0)
 
@@ -342,7 +341,7 @@ class TestStyleStats(unittest.TestCase):
         text_path, index_path = self.make_fixture()
         completed = subprocess.run(
             [sys.executable, str(SCRIPTS / "文风统计.py"), "profile", "--text", str(text_path), "--index", str(index_path), "--chapters", "99"],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=str(ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertNotEqual(completed.returncode, 0)
 
@@ -362,7 +361,7 @@ class TestOverlapCheck(unittest.TestCase):
         cmd = [sys.executable, str(SCRIPTS / "原文重合检查.py"), "check", "--draft", str(draft_path), "--source", str(source_path)]
         if extra:
             cmd.extend(extra)
-        completed = subprocess.run(cmd, cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        completed = subprocess.run(cmd, cwd=str(ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         return json.loads(completed.stdout)
 
@@ -396,7 +395,7 @@ class TestOverlapCheck(unittest.TestCase):
         source_b.write_text("B开头" + base[2:22], encoding="utf-8")
         completed = subprocess.run(
             [sys.executable, str(SCRIPTS / "原文重合检查.py"), "check", "--draft", str(draft_path), "--source", str(source_a), "--source", str(source_b)],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=str(ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         data = json.loads(completed.stdout)
@@ -415,7 +414,7 @@ class TestOverlapCheck(unittest.TestCase):
         whitelist_path.write_text("# 白名单\n一二三四五六七八九十甲乙丙丁戊己庚辛壬癸\n", encoding="utf-8")
         completed = subprocess.run(
             [sys.executable, str(SCRIPTS / "原文重合检查.py"), "check", "--draft", str(draft_path), "--source", str(source_path), "--whitelist", str(whitelist_path)],
-            cwd=str(LONG_ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=str(ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         data = json.loads(completed.stdout)

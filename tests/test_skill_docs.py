@@ -4,11 +4,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LONG_ROOT = ROOT / "long-form"
 
 
 def read_doc(relative_path):
-    return (LONG_ROOT / relative_path).read_text(encoding="utf-8")
+    return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
 class TestLongFormEntryBoundary(unittest.TestCase):
@@ -37,9 +36,10 @@ class TestLongFormEntryBoundary(unittest.TestCase):
         skill = read_doc("SKILL.md")
         paths = set(re.findall(r"`((?:references|prompts)/[^`]+\.md)`", skill))
 
+        self.assertGreater(len(paths), 0)
         for relative_path in paths:
             self.assertTrue(
-                (LONG_ROOT / Path(relative_path)).is_file(),
+                (ROOT / Path(relative_path)).is_file(),
                 f"Missing routed resource: {relative_path}",
             )
 
@@ -389,7 +389,6 @@ class TestWorkflowContractDocs(unittest.TestCase):
         skill = read_doc("SKILL.md")
         project = read_doc("references/项目定位.md")
         prompt = read_doc("prompts/分阶段大纲细化提示词.md")
-        readme = read_doc("README.md")
 
         for doc in [project, prompt]:
             self.assertIn("第1-50章", doc)
@@ -398,15 +397,6 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
         self.assertIn("黄金三章微操细纲", skill)
         self.assertNotIn("第1-50章常规分阶段细纲", skill)
-        self.assertNotIn("黄金三章微操细纲（可选）", readme)
-
-    def test_readme_uses_five_chapter_execution_limit(self):
-        readme = read_doc("README.md")
-
-        self.assertIn("每批最多 5 章", readme)
-        self.assertNotIn("每批约 10 章", readme)
-
-    def test_windows_script_examples_include_py_launcher_fallback(self):
         contract = read_doc("references/自动化脚本契约.md")
 
         self.assertIn("py -3", contract)
@@ -528,23 +518,10 @@ class TestStyleDistillationContracts(unittest.TestCase):
             self.assertIn("原句", doc)
         self.assertIn("不包含来源原句", compile_prompt)
 
-    def test_style_docs_declare_short_form_out_of_scope(self):
-        reference = read_doc("references/文风蒸馏与执行流程.md")
-        distill = read_doc("prompts/文风蒸馏提示词.md")
-        compile_prompt = read_doc("prompts/项目文风编译提示词.md")
-
-        for doc in [reference, distill, compile_prompt]:
-            self.assertIn("短篇", doc)
-
     def test_script_contract_documents_new_scripts(self):
         contract = read_doc("references/自动化脚本契约.md")
         for phrase in ["文风统计.py", "原文重合检查.py", "阻断", "需复核", "白名单"]:
             self.assertIn(phrase, contract)
-
-    def test_short_form_untouched_by_style_contract(self):
-        short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertNotIn("项目文风规范", short_skill)
-        self.assertNotIn("文风基因", short_skill)
 
 
 class TestAIPolishContracts(unittest.TestCase):
@@ -567,21 +544,14 @@ class TestAIPolishContracts(unittest.TestCase):
         ]:
             self.assertIn(phrase, prompt)
         self.assertIn("正式草稿审查", flow)
-        self.assertFalse((LONG_ROOT / "references" / "去AI润稿流程.md").exists())
-        self.assertFalse((LONG_ROOT / "prompts" / "去AI润稿提示词.md").exists())
+        self.assertFalse((ROOT / "references" / "去AI润稿流程.md").exists())
+        self.assertFalse((ROOT / "prompts" / "去AI润稿提示词.md").exists())
 
-    def test_short_form_has_common_ai_polish_layer_without_replacing_type_rules(self):
-        short_skill = (ROOT / "short-form" / "SKILL.md").read_text(encoding="utf-8")
-        prompt = (ROOT / "short-form" / "prompts" / "去AI润稿提示词.md").read_text(encoding="utf-8")
-
-        for phrase in ["去 AI 润稿", "类型提示词", "审查提示词.md", "自然化"]:
-            self.assertIn(phrase, short_skill)
-        for phrase in ["文学滤镜", "对话前摇", "无功能环境", "诊断模式", "润稿模式", "不新增、删除、合并或调换"]:
-            self.assertIn(phrase, prompt)
-
-    def test_root_trigger_mentions_ai_polish(self):
+    def test_root_does_not_advertise_ai_polish_as_independent_stage(self):
         root = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("去 AI 润稿", root)
+        self.assertNotIn("去 AI 润稿", root)
+        self.assertNotIn("short-form", root)
+        self.assertNotIn("短篇", root)
 
 
 class TestGoldfingerDesignContracts(unittest.TestCase):
