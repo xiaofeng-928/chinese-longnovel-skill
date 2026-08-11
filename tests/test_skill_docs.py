@@ -47,13 +47,12 @@ class TestLongFormEntryBoundary(unittest.TestCase):
 class TestDraftWordCountDocs(unittest.TestCase):
     def test_generation_targets_2200_to_3000_and_review_keeps_2000_floor(self):
         skill = read_doc("SKILL.md")
-        outline = read_doc("prompts/大纲生成提示词.md")
         stage_outline = read_doc("prompts/分阶段大纲细化提示词.md")
         generation = read_doc("prompts/草稿生成提示词.md")
         workflow = read_doc("references/草稿生成流程.md")
         review = read_doc("prompts/草稿审查提示词.md")
 
-        for doc in [outline, stage_outline, generation, workflow]:
+        for doc in [stage_outline, generation, workflow]:
             self.assertIn("2200-3000字", doc.replace(" ", ""))
 
         self.assertNotIn("2200-3000", skill)
@@ -159,7 +158,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, workflow)
 
     def test_rank_scan_promotes_selected_candidates_without_implying_full_text(self):
-        scan = read_doc("references/扫榜流程.md")
+        scan = read_doc("references/开书流程.md")
         workflow = read_doc("references/范文拆书与仿写流程.md")
 
         for phrase in ["范文候选", "建立元数据范文", "正文状态：待导入"]:
@@ -259,15 +258,15 @@ class TestWorkflowContractDocs(unittest.TestCase):
         ]:
             self.assertIn(phrase, workflow + prompt)
 
-    def test_rank_scan_is_limited_to_qidian_and_fanqie(self):
-        scan = read_doc("references/扫榜流程.md")
-        prompt = read_doc("prompts/扫榜提示词.md")
+    def test_scan_platform_is_metadata_not_creative_branch(self):
+        scan = read_doc("references/开书流程.md")
+        prompt = read_doc("prompts/扫榜与开书构思提示词.md")
 
-        for phrase in ["只支持番茄小说和起点中文网", "不得扩展到其他平台"]:
+        for phrase in ["来源 URL、榜单日期", "获取合规", "不决定创作分支", "同一套分析模型", "最终只生成一套结论"]:
             self.assertIn(phrase, scan + prompt)
 
     def test_fanqie_scan_promotes_samples_as_metadata_for_manual_body_import(self):
-        scan = read_doc("references/扫榜流程.md")
+        scan = read_doc("references/开书流程.md")
         workflow = read_doc("references/范文拆书与仿写流程.md")
 
         for phrase in [
@@ -330,42 +329,75 @@ class TestWorkflowContractDocs(unittest.TestCase):
         ]:
             self.assertIn(phrase, skill + workflow)
 
-    def test_unspecified_scan_platform_requires_one_explicit_choice(self):
-        scan = read_doc("references/扫榜流程.md")
+    def test_scan_evidence_thresholds_are_documented(self):
+        scan = read_doc("references/开书流程.md")
+        prompt = read_doc("prompts/扫榜与开书构思提示词.md")
 
-        self.assertIn("先确认扫描番茄、起点或两者", scan)
+        for phrase in ["来源 URL", "新鲜（30 天内）", "5 本"]:
+            self.assertIn(phrase, scan + prompt)
+
+    def test_new_book_requires_fresh_scan_evidence(self):
+        skill = read_doc("SKILL.md")
+        scan = read_doc("references/开书流程.md")
+        outline = read_doc("prompts/大纲生成提示词.md")
+
+        self.assertIn("30 天内", skill)
+        self.assertIn("扫榜与开书", skill)
+        self.assertIn("必须", scan)
+        self.assertIn("创作依据/开书方案.md", outline)
+
+    def test_outline_no_longer_asks_length_selection(self):
+        outline = read_doc("prompts/大纲生成提示词.md")
+
+        self.assertNotIn("短篇：100-200章", outline)
+        self.assertNotIn("中篇：200-500章", outline)
+        self.assertNotIn("长篇：500-1000章", outline)
+        self.assertNotIn("第1问", outline)
+        self.assertIn("1000 章以上", outline)
+
+    def test_scan_prompt_generates_complete_schemes(self):
+        prompt = read_doc("prompts/扫榜与开书构思提示词.md")
+
+        for phrase in [
+            "2-3 套完整个人开书方案",
+            "一句话题材和核心幻想",
+            "千章扩展轴",
+            "禁止照搬项和原创差异",
+            "方案选择 + 主角性格/底线校准",
+        ]:
+            self.assertIn(phrase, prompt)
 
     def test_rank_scan_has_a_formal_route_row(self):
         skill = read_doc("SKILL.md")
 
         route_rows = [line for line in skill.splitlines() if "rank-scan" in line]
         self.assertEqual(len(route_rows), 1)
-        self.assertIn("references/扫榜流程.md", route_rows[0])
-        self.assertIn("prompts/扫榜提示词.md", route_rows[0])
+        self.assertIn("references/开书流程.md", route_rows[0])
+        self.assertIn("prompts/扫榜与开书构思提示词.md", route_rows[0])
 
     def test_p0_review_modes_and_rank_scan_are_documented(self):
         skill = read_doc("SKILL.md")
         summary = read_doc("references/总结流程.md")
         review = read_doc("references/草稿审查流程.md")
-        scan = read_doc("references/扫榜流程.md")
-        prompt = read_doc("prompts/扫榜提示词.md")
+        scan = read_doc("references/开书流程.md")
+        prompt = read_doc("prompts/扫榜与开书构思提示词.md")
 
-        for phrase in ["扫榜与选题", "扫榜流程.md", "扫榜提示词.md"]:
+        for phrase in ["扫榜与开书", "开书流程.md", "扫榜与开书构思提示词.md"]:
             self.assertIn(phrase, skill)
         for phrase in ["细纲计划", "正文实际", "structural"]:
             self.assertIn(phrase, summary)
         for phrase in ["Requested Mode:", "Effective Mode:", "Fallback:", ".deslop-whitelist"]:
             self.assertIn(phrase, review)
-        for phrase in ["样本少于 5 个", "选题决策.md", "不编造榜单数据"]:
+        for phrase in ["样本少于 5", "开书方案.md", "不编造榜单数据"]:
             self.assertIn(phrase, scan + prompt)
 
     def test_skill_metadata_and_archive_contract_are_normalized(self):
         skill = read_doc("SKILL.md")
-        structure = read_doc("references/文件结构与锚点.md")
+        structure = read_doc("references/项目结构与迁移.md")
         contract = read_doc("references/自动化脚本契约.md")
 
         self.assertIn("name: my-novel", skill)
-        self.assertIn("总结/` 是总结的唯一标准根目录", structure)
+        self.assertIn("commit-head.json", structure)
         self.assertIn("FORBIDDEN_WORDS_NOT_CONFIGURED", contract)
 
     def test_outline_normalization_and_effective_sequence_are_documented(self):
@@ -497,7 +529,7 @@ class TestStyleDistillationContracts(unittest.TestCase):
         stage = read_doc("prompts/分阶段大纲细化提示词.md")
         golden = read_doc("prompts/黄金三章微操细纲提示词.md")
 
-        for phrase in ["项目文风规范"]:
+        for phrase in ["文风规范"]:
             self.assertIn(phrase, outline)
             self.assertIn(phrase, stage)
             self.assertIn(phrase, golden)
@@ -558,16 +590,12 @@ class TestGoldfingerDesignContracts(unittest.TestCase):
     def test_total_outline_requires_operating_dossier(self):
         prompt = read_doc("prompts/大纲生成提示词.md")
         for phrase in [
-            "金手指设计档案",
+            "系统设计档案",
             "运行闭环",
-            "货物/资源池",
-            "进货方式",
-            "交易/变现方式",
-            "成本与收益",
-            "限制与代价",
-            "升级树",
+            "资源来源与消费出口",
+            "永久限制",
             "阶段演化表",
-            "写回 `novel-config.md`",
+            "设定/系统设定.md",
         ]:
             self.assertIn(phrase, prompt)
 
@@ -743,7 +771,7 @@ class TestProtagonistStateRepositoryContracts(unittest.TestCase):
     def test_outline_prompts_separate_planned_state_from_actual_state(self):
         outline = read_doc("prompts/大纲生成提示词.md")
         stage = read_doc("prompts/分阶段大纲细化提示词.md")
-        for phrase in ["主角状态仓库初始基线", "计划状态", "不写当前实际状态"]:
+        for phrase in ["总结/主角状态仓库.md", "计划状态", "不复制完整系统档案"]:
             self.assertIn(phrase, outline)
         for phrase in ["主角状态仓库", "状态增量", "仓库同步"]:
             self.assertIn(phrase, stage)

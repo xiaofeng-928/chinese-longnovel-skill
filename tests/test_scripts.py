@@ -189,27 +189,110 @@ class TestCountChars(unittest.TestCase):
 
 
 class TestRankScan(unittest.TestCase):
-    def test_rank_scan_groups_genres_and_writes_decision(self):
+    def make_records(self, count, platform="番茄", days_ago=5):
+        from datetime import date, timedelta
+        snapshot = (date.today() - timedelta(days=days_ago)).isoformat()
+        return {
+            "schema_version": 1,
+            "records": [
+                {
+                    "source_platform": platform,
+                    "list_name": "测试榜",
+                    "snapshot_date": snapshot,
+                    "rank": i + 1,
+                    "title": f"测试作品{i}",
+                    "author": f"作者{i}",
+                    "work_id": f"w{i}",
+                    "url": f"https://example.test/book/{i}",
+                    "genre_tags": ["末世", "经营"],
+                    "evidence_dimensions": ["management_loop", "system_loop"],
+                    "captured_at": snapshot,
+                }
+                for i in range(count)
+            ],
+        }
+
+    def run_scan(self, records, archive_dir):
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)
         input_path = Path(temp_dir.name) / "rank.json"
-        output_path = Path(temp_dir.name) / "选题决策.md"
-        input_path.write_text(json.dumps([
-            {"platform": "番茄", "genres": ["末世", "经营"], "heat": "1.2亿", "captured_at": "2026-07-26", "source_url": "https://example.test/a"},
-            {"platform": "番茄", "genres": ["末世"], "heat": "9000万", "captured_at": "2026-07-26", "source_url": "https://example.test/b"},
-            {"platform": "番茄", "genres": ["末世"], "heat": "8000万", "captured_at": "2026-07-26", "source_url": "https://example.test/c"},
-            {"platform": "番茄", "genres": ["经营"], "heat": "7000万", "captured_at": "2026-07-26", "source_url": "https://example.test/d"},
-            {"platform": "番茄", "genres": ["末世"], "heat": "6000万", "captured_at": "2026-07-26", "source_url": "https://example.test/e"},
-        ], ensure_ascii=False), encoding="utf-8")
+        input_path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
         completed = subprocess.run(
-            [sys.executable, str(SCRIPTS / "扫榜.py"), "--input", str(input_path), "--output", str(output_path), "--format", "json"],
-            cwd=str(ROOT), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            [sys.executable, str(SCRIPTS / "扫榜.py"),
+             "--input", str(input_path), "--archive-dir", str(archive_dir)],
+            cwd=str(ROOT), text=True, encoding="utf-8",
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        data = json.loads(completed.stdout)
-        self.assertEqual(data["records"], 5)
-        self.assertEqual(data["candidates"][0]["genre"], "末世")
-        self.assertIn("选题决策", output_path.read_text(encoding="utf-8"))
+        return completed
+
+    def test_ready_with_fresh_market_samples(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data = self.run_scan(self.make_records(5), Path(temp_dir))
+            self.assertEqual(data.returncode, 0, data.stderr)
+            payload = json.loads(data.stdout)
+            self.assertEqual(payload["status"], "ready")
+            self.assertEqual(payload["market_validation_count"], 5)
+            self.assertEqual(payload["fresh_market_validation_count"], 5)
+            self.assertTrue(payload["archive_path"])
+
+    def test_insufficient_samples_returns_code_3(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data = self.run_scan(self.make_records(3), Path(temp_dir))
+            self.assertEqual(data.returncode, 3)
+            payload = json.loads(data.stdout)
+            self.assertEqual(payload["status"], "insufficient_samples")
+            self.assertEqual(payload["market_validation_count"], 3)
+
+    def test_stale_evidence_returns_code_4(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data = self.run_scan(self.make_records(5, days_ago=45), Path(temp_dir))
+            self.assertEqual(data.returncode, 4)
+            payload = json.loads(data.stdout)
+            self.assertEqual(payload["status"], "stale_evidence")
+            self.assertEqual(payload["fresh_market_validation_count"], 0)
+
+    def test_missing_url_is_schema_invalid(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            records = self.make_records(5)
+            for r in records["records"]:
+                r["url"] = ""
+            data = self.run_scan(records, Path(temp_dir))
+            self.assertEqual(data.returncode, 2)
+            payload = json.loads(data.stdout)
+            self.assertEqual(payload["status"], "schema_invalid")
+            self.assertEqual(payload["valid_count"], 0)
+
+    def test_dedup_conflict_returns_code_5(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            records = self.make_records(2)
+            records["records"].append(dict(records["records"][0], title="改名"))
+            data = self.run_scan(records, Path(temp_dir))
+            self.assertEqual(data.returncode, 5)
+            payload = json.loads(data.stdout)
+            self.assertEqual(payload["status"], "dedup_conflict")
+            self.assertTrue(payload["conflicts"])
+
+    def test_reused_archive_does_not_rewrite(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive = Path(temp_dir) / "arch"
+            data1 = self.run_scan(self.make_records(5), archive)
+            path = json.loads(data1.stdout)["archive_path"]
+            mtime = Path(path).stat().st_mtime
+            data2 = self.run_scan(self.make_records(5), archive)
+            payload2 = json.loads(data2.stdout)
+            self.assertTrue(payload2["reused"])
+            self.assertEqual(Path(path).stat().st_mtime, mtime)
+
+    def test_market_count_requires_management_or_system_loop(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            records = self.make_records(6)
+            for r in records["records"]:
+                r["evidence_dimensions"] = ["opening"]
+            data = self.run_scan(records, Path(temp_dir))
+            payload = json.loads(data.stdout)
+            # 无经营证据：market_validation_count 为 0 → insufficient
+            self.assertEqual(payload["market_validation_count"], 0)
+            self.assertEqual(data.returncode, 3)
 
 
 STYLE_TEXT = """第1章 永夜
