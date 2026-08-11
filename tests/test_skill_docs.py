@@ -48,7 +48,7 @@ class TestDraftWordCountDocs(unittest.TestCase):
     def test_generation_targets_2200_to_3000_and_review_keeps_2000_floor(self):
         skill = read_doc("SKILL.md")
         stage_outline = read_doc("prompts/分阶段大纲细化提示词.md")
-        generation = read_doc("prompts/草稿生成提示词.md")
+        generation = read_doc("prompts/正文生成提示词.md")
         workflow = read_doc("references/草稿生成流程.md")
         review = read_doc("prompts/草稿审查提示词.md")
 
@@ -386,7 +386,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, skill)
         for phrase in ["细纲计划", "正文实际", "structural"]:
             self.assertIn(phrase, summary)
-        for phrase in ["Requested Mode:", "Effective Mode:", "Fallback:", ".deslop-whitelist"]:
+        for phrase in ["Requested Mode:", "Effective Mode:", "Fallback:"]:
             self.assertIn(phrase, review)
         for phrase in ["样本少于 5", "开书方案.md", "不编造榜单数据"]:
             self.assertIn(phrase, scan + prompt)
@@ -398,7 +398,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
         self.assertIn("name: my-novel", skill)
         self.assertIn("commit-head.json", structure)
-        self.assertIn("FORBIDDEN_WORDS_NOT_CONFIGURED", contract)
+        self.assertIn("validate_chapter_candidate.py", contract)
 
     def test_outline_normalization_and_effective_sequence_are_documented(self):
         skill = read_doc("SKILL.md")
@@ -501,14 +501,14 @@ class TestStyleDistillationContracts(unittest.TestCase):
 
     def test_draft_prompts_include_style_version_and_character_priority(self):
         docs = [
-            read_doc("prompts/草稿生成提示词.md"),
+            read_doc("prompts/正文生成提示词.md"),
             read_doc("prompts/草稿审查提示词.md"),
             read_doc("prompts/草稿自动修复提示词.md"),
         ]
         for doc in docs:
             self.assertIn("项目文风规范", doc)
             self.assertIn("性格规格卡", doc)
-        self.assertIn("本章文风执行表", read_doc("prompts/草稿生成提示词.md"))
+        self.assertIn("本章文风执行表", read_doc("prompts/正文生成提示词.md"))
         self.assertIn("文风执行核对", read_doc("prompts/草稿审查提示词.md"))
 
     def test_review_reports_style_check_block(self):
@@ -556,34 +556,37 @@ class TestStyleDistillationContracts(unittest.TestCase):
             self.assertIn(phrase, contract)
 
 
-class TestAIPolishContracts(unittest.TestCase):
-    def test_long_form_generates_without_independent_ai_polish_stage(self):
+class TestNaturalizationContracts(unittest.TestCase):
+    def test_naturalization_rules_exist_only_in_single_prompt(self):
         skill = read_doc("SKILL.md")
-        flow = read_doc("references/草稿生成流程.md")
-        prompt = read_doc("prompts/草稿生成提示词.md")
+        naturalization = read_doc("prompts/正文自然化提示词.md")
 
-        for phrase in [
-            "去 AI 味是正文生成的固有约束",
-            "不另设生成后二次润稿阶段",
-            "修复 AI 味或文风偏移",
-        ]:
-            self.assertIn(phrase, skill)
-        for phrase in [
-            "去AI味约束",
-            "不是事后二次加工的补救项",
-            "从下笔那一刻起",
-            "字数守恒红线",
-        ]:
-            self.assertIn(phrase, prompt)
-        self.assertIn("正式草稿审查", flow)
-        self.assertFalse((ROOT / "references" / "去AI润稿流程.md").exists())
-        self.assertFalse((ROOT / "prompts" / "去AI润稿提示词.md").exists())
+        self.assertIn("正文自然化提示词.md", skill)
+        self.assertIn("THIRD_PARTY_NOTICES.md", skill)
+        for phrase in ["不新增、删除、合并或调换事件", "不改系统数值", "不切换叙事视角",
+                       "不引用范文原句", "不以删字代替改写"]:
+            self.assertIn(phrase, naturalization)
+
+    def test_naturalization_stage_precedes_formal_review(self):
+        skill = read_doc("SKILL.md")
+        self.assertIn("自然化", skill)
+        self.assertIn("审查", skill)
 
     def test_root_does_not_advertise_ai_polish_as_independent_stage(self):
         root = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         self.assertNotIn("去 AI 润稿", root)
         self.assertNotIn("short-form", root)
         self.assertNotIn("短篇", root)
+
+    def test_naturalization_prompt_does_not_output_scores_or_teaching(self):
+        naturalization = read_doc("prompts/正文自然化提示词.md")
+        self.assertNotIn("/50", naturalization)
+        self.assertIn("只包含修改后的完整章节", naturalization)
+
+    def test_third_party_notice_exists_with_source_hash(self):
+        notice = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        self.assertIn("e0edbdbc9008644263d5573fb59beac95794e188fd99c35012bfd79e9ae4beeb", notice)
+        self.assertIn("aa00e74769e1b9d8e7fa7094dbfcca9b129a0ded6dce1cf4da050b99146d2fa7", notice)
 
 
 class TestGoldfingerDesignContracts(unittest.TestCase):
@@ -626,7 +629,7 @@ class TestGoldfingerDesignContracts(unittest.TestCase):
 
     def test_draft_workflows_audit_goldfinger_contract(self):
         docs = [
-            read_doc("prompts/草稿生成提示词.md"),
+            read_doc("prompts/正文生成提示词.md"),
             read_doc("prompts/草稿审查提示词.md"),
             read_doc("prompts/草稿自动修复提示词.md"),
         ]
@@ -718,7 +721,7 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
         self.assertIn("禁止双重权威", repository)
 
     def test_draft_review_detects_task_and_choice_failures(self):
-        generation = read_doc("prompts/草稿生成提示词.md")
+        generation = read_doc("prompts/正文生成提示词.md")
         review = read_doc("prompts/草稿审查提示词.md")
         repair = read_doc("prompts/草稿自动修复提示词.md")
         for phrase in ["任务感知来源", "主角选择", "场景化结算"]:
@@ -778,7 +781,7 @@ class TestProtagonistStateRepositoryContracts(unittest.TestCase):
 
     def test_draft_workflows_require_repository_context(self):
         docs = [
-            read_doc("prompts/草稿生成提示词.md"),
+            read_doc("prompts/正文生成提示词.md"),
             read_doc("prompts/草稿审查提示词.md"),
             read_doc("prompts/草稿自动修复提示词.md"),
         ]

@@ -1,0 +1,10 @@
+[
+  {
+    "lock_id": "fl-0001",
+    "category": "system_balance",
+    "expected_value": "1000",
+    "source_path": "C:/Users/Lenovo/.claude/skills/MyNovel/tests/fixtures/attempt_ok/workspace/source.md",
+    "source_anchor": "生存点余额：1000",
+    "source_sha256": "8ffd94108470cad080e4accfc651668af7ad3178fa9154c5c26ff513297efae2"
+  }
+]

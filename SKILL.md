@@ -13,6 +13,7 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 - 提示词：`prompts/`
 - 参考文档：`references/`
 - 通用脚本：`scripts/`
+- 第三方许可：`THIRD_PARTY_NOTICES.md`（不进入正文运行上下文）
 - 小说工作区：`D:\ai小说`
 - 长篇项目根目录：`D:\ai小说\小说`
 - 长篇范文库：`D:\ai小说\小说\范文`
@@ -68,25 +69,25 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 | 细化大纲 / 第X-X章大纲 | 分阶段大纲细化 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/分阶段大纲细化提示词.md` |
 | 整理手写或笼统细纲 | 细纲整理 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/细纲整理流程.md`、`references/章节序列.md` | `prompts/细纲整理提示词.md` |
 | 黄金三章 / 前三章微操 | 黄金三章微操细纲 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/黄金三章微操细纲提示词.md` |
-| 写第X章 / 正文 / 写下一章 | 正文生成 | `references/上下文组装.md`、`references/草稿生成流程.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/草稿生成提示词.md` |
+| 写第X章 / 正文 / 写下一章 | 正文生成 | `references/上下文组装.md`、`references/草稿生成流程.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/正文生成提示词.md` |
 | 审查草稿 / 检查草稿 | 草稿审查 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/项目结构与迁移.md`、`references/自动化脚本契约.md` | `prompts/草稿审查提示词.md` |
 | 推荐修改方案 / 高风险修改技法 | 修改建议与技法应用 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/草稿修复流程.md` | `prompts/修改建议与技法应用提示词.md` |
 | 审查并修复 / review and fix | 草稿审查后自动修复 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/草稿修复流程.md` | `prompts/草稿审查提示词.md`、`prompts/草稿自动修复提示词.md` |
-| 修复第X章 / fix / 修复 AI 味或文风偏移 | 自动修复 | `references/上下文组装.md`、`references/草稿修复流程.md` | `prompts/草稿自动修复提示词.md` |
+| 修复第X章 / fix / 修复自然化或审查发现的问题 | 自动修复 | `references/上下文组装.md`、`references/草稿修复流程.md` | `prompts/草稿自动修复提示词.md` |
 | 修好了 / 已修复 / 修改完毕 | 修复确认 | `references/草稿修复流程.md`、`references/项目结构与迁移.md` | 无 |
 | 总结第X章 / 章节总结 | 章节总结 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
 | 一致性 / 矛盾 / 对不上 | 一致性检查 | `references/一致性检查.md`、`references/上下文组装.md` | 无 |
-| 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/上下文组装.md`、`references/草稿生成流程.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/草稿生成提示词.md` |
+| 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/上下文组装.md`、`references/草稿生成流程.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/正文生成提示词.md` |
 | 今天小说就到这 / 本轮章节结束 | 会话结束流程 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
 
 ## 工作流组合
 
-新书完整生产链为：扫榜与开书 → 拆书与范文入库 → 可选文风蒸馏 → 确定题材与项目文风 → 总大纲、黄金三章和分阶段细纲 → 正文生成 → 草稿审查 → 修复与归档。各阶段的前置条件以路由文档为准。
+新书完整生产链为：扫榜与开书 → 拆书与范文入库 → 可选文风蒸馏 → 确定题材与项目文风 → 总大纲、黄金三章和分阶段细纲 → 正文生成 → 正文自然化 → 草稿审查 → 修复与归档。各阶段的前置条件以路由文档为准。
 
 - 新书没有新鲜（30 天内）且匹配的扫榜归档时，不得直接进入大纲生成或新小说初始化；先按 `references/开书流程.md` 完成扫榜与开书方案。
+- 正文生成后进入单一自然化阶段（`prompts/正文自然化提示词.md`），保存自然化前版本与哈希，再进入正式草稿审查；用户明确要求保留原始表达时可以跳过，跳过原因写入审查元数据。
 - 用户只要求“写第X章”时完成正文生成、字数验证和本章总结，不自动进入正式审查与修复。
 - 用户明确要求“走完整流程”时，才连续执行审查、修复和归档。
-- 去 AI 味是正文生成的固有约束，不另设生成后二次润稿阶段；既有草稿仍有 AI 味或文风偏移时进入自动修复路由。
 
 ## 执行收尾
 

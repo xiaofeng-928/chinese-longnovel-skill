@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""审查字数统计 CLI，口径与小说质检.py 一致。"""
+"""审查字数统计 CLI，唯一字数统计入口（省略号加权口径）。"""
 
 from __future__ import annotations
 
