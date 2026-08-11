@@ -49,8 +49,8 @@ class TestDraftWordCountDocs(unittest.TestCase):
         skill = read_doc("SKILL.md")
         stage_outline = read_doc("prompts/分阶段大纲细化提示词.md")
         generation = read_doc("prompts/正文生成提示词.md")
-        workflow = read_doc("references/草稿生成流程.md")
-        review = read_doc("prompts/草稿审查提示词.md")
+        workflow = read_doc("references/正文生产与审修.md")
+        review = read_doc("prompts/正文审查与修复提示词.md")
 
         for doc in [stage_outline, generation, workflow]:
             self.assertIn("2200-3000字", doc.replace(" ", ""))
@@ -378,7 +378,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
     def test_p0_review_modes_and_rank_scan_are_documented(self):
         skill = read_doc("SKILL.md")
         summary = read_doc("references/总结流程.md")
-        review = read_doc("references/草稿审查流程.md")
+        review = read_doc("references/正文生产与审修.md")
         scan = read_doc("references/开书流程.md")
         prompt = read_doc("prompts/扫榜与开书构思提示词.md")
 
@@ -386,7 +386,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, skill)
         for phrase in ["细纲计划", "正文实际", "structural"]:
             self.assertIn(phrase, summary)
-        for phrase in ["Requested Mode:", "Effective Mode:", "Fallback:"]:
+        for phrase in ["自然化前后差异审查", "候选正文对项目上下文审查", "validate_chapter_candidate.py"]:
             self.assertIn(phrase, review)
         for phrase in ["样本少于 5", "开书方案.md", "不编造榜单数据"]:
             self.assertIn(phrase, scan + prompt)
@@ -502,17 +502,17 @@ class TestStyleDistillationContracts(unittest.TestCase):
     def test_draft_prompts_include_style_version_and_character_priority(self):
         docs = [
             read_doc("prompts/正文生成提示词.md"),
-            read_doc("prompts/草稿审查提示词.md"),
-            read_doc("prompts/草稿自动修复提示词.md"),
+            read_doc("prompts/正文审查与修复提示词.md"),
+            read_doc("prompts/正文审查与修复提示词.md"),
         ]
         for doc in docs:
             self.assertIn("项目文风规范", doc)
             self.assertIn("性格规格卡", doc)
         self.assertIn("本章文风执行表", read_doc("prompts/正文生成提示词.md"))
-        self.assertIn("文风执行核对", read_doc("prompts/草稿审查提示词.md"))
+        self.assertIn("文风执行核对", read_doc("prompts/正文审查与修复提示词.md"))
 
     def test_review_reports_style_check_block(self):
-        prompt = read_doc("prompts/草稿审查提示词.md")
+        prompt = read_doc("prompts/正文审查与修复提示词.md")
         for phrase in [
             "## 文风执行核对",
             "项目文风版本",
@@ -630,8 +630,8 @@ class TestGoldfingerDesignContracts(unittest.TestCase):
     def test_draft_workflows_audit_goldfinger_contract(self):
         docs = [
             read_doc("prompts/正文生成提示词.md"),
-            read_doc("prompts/草稿审查提示词.md"),
-            read_doc("prompts/草稿自动修复提示词.md"),
+            read_doc("prompts/正文审查与修复提示词.md"),
+            read_doc("prompts/正文审查与修复提示词.md"),
         ]
         for doc in docs:
             self.assertIn("金手指设计档案", doc)
@@ -722,8 +722,8 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
 
     def test_draft_review_detects_task_and_choice_failures(self):
         generation = read_doc("prompts/正文生成提示词.md")
-        review = read_doc("prompts/草稿审查提示词.md")
-        repair = read_doc("prompts/草稿自动修复提示词.md")
+        review = read_doc("prompts/正文审查与修复提示词.md")
+        repair = read_doc("prompts/正文审查与修复提示词.md")
         for phrase in ["任务感知来源", "主角选择", "场景化结算"]:
             self.assertIn(phrase, generation)
         for phrase in [
@@ -782,8 +782,8 @@ class TestProtagonistStateRepositoryContracts(unittest.TestCase):
     def test_draft_workflows_require_repository_context(self):
         docs = [
             read_doc("prompts/正文生成提示词.md"),
-            read_doc("prompts/草稿审查提示词.md"),
-            read_doc("prompts/草稿自动修复提示词.md"),
+            read_doc("prompts/正文审查与修复提示词.md"),
+            read_doc("prompts/正文审查与修复提示词.md"),
         ]
         for doc in docs:
             self.assertIn("主角状态仓库", doc)

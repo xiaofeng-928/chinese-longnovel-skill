@@ -69,15 +69,14 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 | 细化大纲 / 第X-X章大纲 | 分阶段大纲细化 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/分阶段大纲细化提示词.md` |
 | 整理手写或笼统细纲 | 细纲整理 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/细纲整理流程.md`、`references/章节序列.md` | `prompts/细纲整理提示词.md` |
 | 黄金三章 / 前三章微操 | 黄金三章微操细纲 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/黄金三章微操细纲提示词.md` |
-| 写第X章 / 正文 / 写下一章 | 正文生成 | `references/上下文组装.md`、`references/草稿生成流程.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/正文生成提示词.md` |
-| 审查草稿 / 检查草稿 | 草稿审查 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/项目结构与迁移.md`、`references/自动化脚本契约.md` | `prompts/草稿审查提示词.md` |
-| 推荐修改方案 / 高风险修改技法 | 修改建议与技法应用 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/草稿修复流程.md` | `prompts/修改建议与技法应用提示词.md` |
-| 审查并修复 / review and fix | 草稿审查后自动修复 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/草稿修复流程.md` | `prompts/草稿审查提示词.md`、`prompts/草稿自动修复提示词.md` |
-| 修复第X章 / fix / 修复自然化或审查发现的问题 | 自动修复 | `references/上下文组装.md`、`references/草稿修复流程.md` | `prompts/草稿自动修复提示词.md` |
-| 修好了 / 已修复 / 修改完毕 | 修复确认 | `references/草稿修复流程.md`、`references/项目结构与迁移.md` | 无 |
+| 写第X章 / 正文 / 写下一章 | 正文生成 | `references/上下文组装.md`、`references/正文生产与审修.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/正文生成提示词.md` |
+| 审查草稿 / 检查草稿 | 草稿审查 | `references/上下文组装.md`、`references/正文生产与审修.md`、`references/项目结构与迁移.md`、`references/自动化脚本契约.md` | `prompts/正文审查与修复提示词.md` |
+| 审查并修复 / review and fix | 草稿审查后自动修复 | `references/上下文组装.md`、`references/正文生产与审修.md`、`references/正文生产与审修.md` | `prompts/正文审查与修复提示词.md`、`prompts/正文审查与修复提示词.md` |
+| 修复第X章 / fix / 修复自然化或审查发现的问题 | 自动修复 | `references/上下文组装.md`、`references/正文生产与审修.md` | `prompts/正文审查与修复提示词.md` |
+| 修好了 / 已修复 / 修改完毕 | 修复确认 | `references/正文生产与审修.md`、`references/项目结构与迁移.md` | 无 |
 | 总结第X章 / 章节总结 | 章节总结 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
 | 一致性 / 矛盾 / 对不上 | 一致性检查 | `references/一致性检查.md`、`references/上下文组装.md` | 无 |
-| 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/上下文组装.md`、`references/草稿生成流程.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/正文生成提示词.md` |
+| 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/上下文组装.md`、`references/正文生产与审修.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/正文生成提示词.md` |
 | 今天小说就到这 / 本轮章节结束 | 会话结束流程 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
 
 ## 工作流组合
