@@ -52,15 +52,22 @@ def check_authority_files_exist(project_root: Path, status: str):
         if not path.is_file():
             errors.append(f"declared authority file does not exist: {value}")
 
-    # required 系统模式必须存在系统设定与系统状态
+    # required 系统模式：系统设定在"系统设计"状态起必需，系统状态在"正文中"起必需
     core = dict(core)
+    system_statuses = {"系统设计", "总纲", "细纲", "正文中", "完结"}
+    runtime_statuses = {"正文中", "完结"}
     if core.get("系统模式") == "required":
-        for key in ["系统设定", "系统状态"]:
-            value = authority.get(key)
+        if status in system_statuses:
+            value = authority.get("系统设定")
             if not value or value == "null":
-                errors.append(f"required system mode needs authority path: {key}")
-                continue
-            if not (project_root / value).is_file():
+                errors.append(f"required system mode needs authority path: 系统设定")
+            elif not (project_root / value).is_file():
+                errors.append(f"declared system authority file missing: {value}")
+        if status in runtime_statuses:
+            value = authority.get("系统状态")
+            if not value or value == "null":
+                errors.append(f"required system mode needs authority path: 系统状态")
+            elif not (project_root / value).is_file():
                 errors.append(f"declared system authority file missing: {value}")
     return not errors, [f"authority: {e}" for e in errors]
 
@@ -107,10 +114,13 @@ def check_html_anchors(project_root: Path):
     return not errors, [f"anchor: {e}" for e in errors]
 
 
-def check_commit_chain(project_root: Path):
+def check_commit_chain(project_root: Path, status: str):
     core, _ = tx.parse_manifest(project_root)
     project_id = core.get("project_id")
     if not project_id:
+        return True, []
+    # 开书方案/系统设计/总纲 状态尚未进入正文生产，不需要 genesis head
+    if status in ("开书方案", "系统设计", "总纲"):
         return True, []
     ok, errors = tx.verify_chain(project_root, project_id)
     return ok, [f"chain: {e}" for e in errors]
@@ -140,7 +150,7 @@ def check_project(project_root: Path):
         "authority": check_authority_files_exist(project_root, status),
         "plan": check_stale_runtime_state_in_plan(project_root),
         "anchor": check_html_anchors(project_root),
-        "chain": check_commit_chain(project_root),
+        "chain": check_commit_chain(project_root, status),
         "duplicate_authority": check_duplicate_authority_blocks(project_root),
     }
 
