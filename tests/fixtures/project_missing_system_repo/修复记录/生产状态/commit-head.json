@@ -1,0 +1,8 @@
+{
+  "project_id": "a1b2c3d4-0000-4000-8000-000000000001",
+  "head_transaction_id": "tx-genesis",
+  "parent_transaction_id": null,
+  "generation_id": "gen-0001",
+  "committed_node_id": null,
+  "projection_hashes": {}
+}

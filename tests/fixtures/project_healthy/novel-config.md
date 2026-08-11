@@ -6,8 +6,8 @@
 - legacy_snapshot_path：null
 - operation_mode：normal
 - project_status：正文中
-- project_id：a1b2c3d4-0000-4000-8000-000000000001
-- 书名：全球冰封：我开重卡打造陆地航母
+- project_id：a1b2c3d4-0000-4000-8000-000000000002
+- 书名：健康项目
 - 产品类型：长篇经营类系统爽文
 - 系统模式：required
 - 经营主线：true

@@ -55,29 +55,29 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 | 用户意图 | 工作流 | 必读参考文档 | 必读提示词 |
 |---|---|---|---|
 | rank-scan / 扫榜与选题 / 确定题材 | 扫榜与选题 | `references/扫榜流程.md` | `prompts/扫榜提示词.md` |
-| 装书 / 导入长篇范文 / 范文入库 | 范文入库 | `references/范文拆书与仿写流程.md`、`references/文件结构与锚点.md` | 有合法正文时读 `prompts/拆书与仿写提示词.md` |
+| 装书 / 导入长篇范文 / 范文入库 | 范文入库 | `references/范文拆书与仿写流程.md`、`references/项目结构与迁移.md` | 有合法正文时读 `prompts/拆书与仿写提示词.md` |
 | 拆书 / 深度拆解范文 / 分析爆款结构 | 范文拆书 | `references/范文拆书与仿写流程.md` | `prompts/拆书与仿写提示词.md` |
-| 文风蒸馏 / 生成文风基因 / 更新范文文风档案 | 文风蒸馏 | `references/文风蒸馏与执行流程.md`、`references/文件结构与锚点.md` | `prompts/文风蒸馏提示词.md` |
-| 仿写 / 对标范文开原创长篇 | 原创仿写 | `references/范文拆书与仿写流程.md`、`references/项目定位.md`、`references/文件结构与锚点.md` | `prompts/拆书与仿写提示词.md`、`prompts/大纲生成提示词.md` |
-| 确定或融合项目文风 / 修改后续文风 | 项目文风确定 | `references/文风蒸馏与执行流程.md`、`references/项目定位.md`、`references/文件结构与锚点.md` | `prompts/项目文风编译提示词.md` |
+| 文风蒸馏 / 生成文风基因 / 更新范文文风档案 | 文风蒸馏 | `references/文风蒸馏与执行流程.md`、`references/项目结构与迁移.md` | `prompts/文风蒸馏提示词.md` |
+| 仿写 / 对标范文开原创长篇 | 原创仿写 | `references/范文拆书与仿写流程.md`、`references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/拆书与仿写提示词.md`、`prompts/大纲生成提示词.md` |
+| 确定或融合项目文风 / 修改后续文风 | 项目文风确定 | `references/文风蒸馏与执行流程.md`、`references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/项目文风编译提示词.md` |
 | 文风校准 / 连续章节文风偏移 | 文风校准 | `references/文风蒸馏与执行流程.md`、`references/上下文组装.md` | 无 |
-| 新小说 / 新建小说 / 粘贴新总大纲 | 新小说初始化 | `references/项目定位.md`、`references/文件结构与锚点.md` | 无 |
+| 新小说 / 新建小说 / 粘贴新总大纲 | 新小说初始化 | `references/项目定位.md`、`references/项目结构与迁移.md` | 无 |
 | 大纲 / 总大纲 / 规划剧情 | 大纲生成 | `references/项目定位.md` | `prompts/大纲生成提示词.md` |
 | 设计系统或金手指 / 重构金手指 | 金手指设计/重构 | `references/项目定位.md`、`references/金手指设计与运营.md` | `prompts/金手指设计提示词.md` |
-| 规划阶段金手指发展 | 金手指阶段规划 | `references/项目定位.md`、`references/文件结构与锚点.md`、`references/金手指设计与运营.md` | `prompts/金手指阶段规划提示词.md` |
-| 细化大纲 / 第X-X章大纲 | 分阶段大纲细化 | `references/项目定位.md`、`references/文件结构与锚点.md` | `prompts/分阶段大纲细化提示词.md` |
-| 整理手写或笼统细纲 | 细纲整理 | `references/项目定位.md`、`references/文件结构与锚点.md`、`references/细纲整理流程.md`、`references/章节序列.md` | `prompts/细纲整理提示词.md` |
-| 黄金三章 / 前三章微操 | 黄金三章微操细纲 | `references/项目定位.md`、`references/文件结构与锚点.md` | `prompts/黄金三章微操细纲提示词.md` |
+| 规划阶段金手指发展 | 金手指阶段规划 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/金手指设计与运营.md` | `prompts/金手指阶段规划提示词.md` |
+| 细化大纲 / 第X-X章大纲 | 分阶段大纲细化 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/分阶段大纲细化提示词.md` |
+| 整理手写或笼统细纲 | 细纲整理 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/细纲整理流程.md`、`references/章节序列.md` | `prompts/细纲整理提示词.md` |
+| 黄金三章 / 前三章微操 | 黄金三章微操细纲 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/黄金三章微操细纲提示词.md` |
 | 写第X章 / 正文 / 写下一章 | 正文生成 | `references/上下文组装.md`、`references/草稿生成流程.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/草稿生成提示词.md` |
-| 审查草稿 / 检查草稿 | 草稿审查 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/文件结构与锚点.md`、`references/自动化脚本契约.md` | `prompts/草稿审查提示词.md` |
+| 审查草稿 / 检查草稿 | 草稿审查 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/项目结构与迁移.md`、`references/自动化脚本契约.md` | `prompts/草稿审查提示词.md` |
 | 推荐修改方案 / 高风险修改技法 | 修改建议与技法应用 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/草稿修复流程.md` | `prompts/修改建议与技法应用提示词.md` |
 | 审查并修复 / review and fix | 草稿审查后自动修复 | `references/上下文组装.md`、`references/草稿审查流程.md`、`references/草稿修复流程.md` | `prompts/草稿审查提示词.md`、`prompts/草稿自动修复提示词.md` |
 | 修复第X章 / fix / 修复 AI 味或文风偏移 | 自动修复 | `references/上下文组装.md`、`references/草稿修复流程.md` | `prompts/草稿自动修复提示词.md` |
-| 修好了 / 已修复 / 修改完毕 | 修复确认 | `references/草稿修复流程.md`、`references/文件结构与锚点.md` | 无 |
-| 总结第X章 / 章节总结 | 章节总结 | `references/总结流程.md`、`references/文件结构与锚点.md` | 无 |
+| 修好了 / 已修复 / 修改完毕 | 修复确认 | `references/草稿修复流程.md`、`references/项目结构与迁移.md` | 无 |
+| 总结第X章 / 章节总结 | 章节总结 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
 | 一致性 / 矛盾 / 对不上 | 一致性检查 | `references/一致性检查.md`、`references/上下文组装.md` | 无 |
 | 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/上下文组装.md`、`references/草稿生成流程.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/草稿生成提示词.md` |
-| 今天小说就到这 / 本轮章节结束 | 会话结束流程 | `references/总结流程.md`、`references/文件结构与锚点.md` | 无 |
+| 今天小说就到这 / 本轮章节结束 | 会话结束流程 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
 
 ## 工作流组合
 
