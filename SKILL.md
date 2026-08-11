@@ -67,17 +67,17 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 | 设计系统或金手指 / 重构系统 | 系统设计/重构 | `references/项目定位.md`、`references/系统设计与运营.md` | `prompts/系统设计提示词.md` |
 | 规划阶段系统发展 | 系统阶段规划 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/系统设计与运营.md` | `prompts/系统阶段规划提示词.md` |
 | 细化大纲 / 第X-X章大纲 | 分阶段大纲细化 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/分阶段大纲细化提示词.md` |
-| 整理手写或笼统细纲 | 细纲整理 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/细纲整理流程.md`、`references/长篇上下文与一致性.md` | `prompts/细纲整理提示词.md` |
+| 整理手写或笼统细纲 | 细纲整理 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/细纲整理流程.md`、`references/长篇上下文与一致性.md` | `prompts/分阶段大纲细化提示词.md`（整理既有细纲模式） |
 | 黄金三章 / 前三章微操 | 黄金三章微操细纲 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/黄金三章微操细纲提示词.md` |
-| 写第X章 / 正文 / 写下一章 | 正文生成 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/总结流程.md`、`references/长篇上下文与一致性.md` | `prompts/正文生成提示词.md` |
+| 写第X章 / 正文 / 写下一章 | 正文生成 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/状态与总结.md`、`references/长篇上下文与一致性.md` | `prompts/正文生成提示词.md` |
 | 审查草稿 / 检查草稿 | 草稿审查 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/项目结构与迁移.md`、`references/自动化脚本契约.md` | `prompts/正文审查与修复提示词.md` |
 | 审查并修复 / review and fix | 草稿审查后自动修复 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/正文生产与审修.md` | `prompts/正文审查与修复提示词.md`、`prompts/正文审查与修复提示词.md` |
 | 修复第X章 / fix / 修复自然化或审查发现的问题 | 自动修复 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md` | `prompts/正文审查与修复提示词.md` |
 | 修好了 / 已修复 / 修改完毕 | 修复确认 | `references/正文生产与审修.md`、`references/项目结构与迁移.md` | 无 |
-| 总结第X章 / 章节总结 | 章节总结 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
+| 总结第X章 / 章节总结 | 章节总结 | `references/状态与总结.md`、`references/项目结构与迁移.md` | 无 |
 | 一致性 / 矛盾 / 对不上 | 一致性检查 | `references/长篇上下文与一致性.md`、`references/长篇上下文与一致性.md` | 无 |
-| 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/总结流程.md`、`references/长篇上下文与一致性.md` | `prompts/正文生成提示词.md` |
-| 今天小说就到这 / 本轮章节结束 | 会话结束流程 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
+| 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/状态与总结.md`、`references/长篇上下文与一致性.md` | `prompts/正文生成提示词.md` |
+| 今天小说就到这 / 本轮章节结束 | 会话结束流程 | `references/状态与总结.md`、`references/项目结构与迁移.md` | 无 |
 | 生成 EPUB / 导出电子书 | EPUB 导出与同步 | `references/EPUB导出与同步.md`、`references/项目结构与迁移.md` | 无 |
 
 ## 工作流组合

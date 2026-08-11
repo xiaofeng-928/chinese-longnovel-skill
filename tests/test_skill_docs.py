@@ -377,7 +377,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
     def test_p0_review_modes_and_rank_scan_are_documented(self):
         skill = read_doc("SKILL.md")
-        summary = read_doc("references/总结流程.md")
+        summary = read_doc("references/状态与总结.md")
         review = read_doc("references/正文生产与审修.md")
         scan = read_doc("references/开书流程.md")
         prompt = read_doc("prompts/扫榜与开书构思提示词.md")
@@ -402,7 +402,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
     def test_outline_normalization_and_effective_sequence_are_documented(self):
         skill = read_doc("SKILL.md")
-        prompt = read_doc("prompts/细纲整理提示词.md")
+        prompt = read_doc("prompts/分阶段大纲细化提示词.md")
         process = read_doc("references/细纲整理流程.md")
         sequence = read_doc("references/长篇上下文与一致性.md")
         context = read_doc("references/长篇上下文与一致性.md")
@@ -712,8 +712,8 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
 
     def test_context_and_summary_support_optional_separate_repository(self):
         context = read_doc("references/长篇上下文与一致性.md")
-        repository = read_doc("references/主角状态仓库.md")
-        summary = read_doc("references/总结流程.md")
+        repository = read_doc("references/状态与总结.md")
+        summary = read_doc("references/状态与总结.md")
         structure = read_doc("references/文件结构与锚点.md")
         for doc in [context, repository, summary, structure]:
             self.assertIn("总结/系统状态仓库.md", doc)
@@ -752,7 +752,7 @@ class TestProtagonistStateRepositoryContracts(unittest.TestCase):
             self.assertIn(phrase, structure)
 
     def test_summary_flow_records_deltas_without_copying_repository(self):
-        summary = read_doc("references/总结流程.md")
+        summary = read_doc("references/状态与总结.md")
         for phrase in [
             "主角状态增量",
             "主角状态仓库同步",
