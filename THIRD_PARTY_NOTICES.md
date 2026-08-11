@@ -5,7 +5,7 @@
 ## Humanizer-zh
 
 - 来源：`Humanizer-zh`（下载目录 `C:\Users\Lenovo\Downloads\Humanizer-zh-main\Humanizer-zh-main`）
-- 用途：MyNovel 的 `prompts/正文自然化提示词.md` 按 vNext 逐项映射融合了 Humanizer-zh 的通用自然化规则。
+- 用途：MyNovel 的 `prompts/正文自然化提示词.md` 完整内置并按长篇网络小说场景重组了 Humanizer-zh 的通用自然化规则；运行时不依赖外部 Humanizer-zh Skill。
 - 许可证：MIT
 - Copyright (c) 2026 歸藏
 

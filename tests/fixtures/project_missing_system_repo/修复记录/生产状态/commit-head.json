@@ -4,5 +4,12 @@
   "parent_transaction_id": null,
   "generation_id": "gen-0001",
   "committed_node_id": null,
-  "projection_hashes": {}
+  "projection_hashes": {
+    "plan/总大纲.md": "3a8b2647368fb593249915a08053f5bf2e43b35d86eff6f13ea76787d707ba78",
+    "plan/大纲_第1-50章.md": "e7a656d4be17a64d506faa8ce0dc1ad2a3354d662b32ab02ba85d174e3f39d16",
+    "plan/系统发展_第1-50章.md": "36fcdd90c4c9ac2bd9c17231fb522c4554ef611c0e8275462a5f8130b8818917"
+  },
+  "chain_hash": "24225529a0dd59d0f36de6650d5ebbd11877abbba69f796cd487f47c05663452",
+  "operation_mode": "normal",
+  "commit_hash": "3aa279e13ec0f09d44d13a81939ae689215068a733138717236a8490714f0d0f"
 }

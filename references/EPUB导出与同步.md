@@ -17,8 +17,8 @@ EPUB 脚本不提升为 MyNovel 根目录的通用写入脚本。`convert_to_epu
 
 ## 导出流程
 
-1. 导出获取项目级写锁，锁的 `operation` 为 `epub`；记录 `project_id`、`source_head_transaction_id` 和 `source_head_sha256`，在同一锁保护下冻结正文清单与完整 plan 快照。
-2. 构建先写项目内临时目录，生成 EPUB 和 `export-manifest.json`。清单包含不可变 `project_id`、确定性 `build_id = epub-<headSHA前12位>-<plan清单SHA前12位>`、原始书名、安全目录名、所有导出 node ID、正文 SHA-256、EPUB SHA-256、plan 相对路径与 SHA-256，以及脚本契约版本。同一源重试复用 build ID 和 staging，不重复创建不同结果。
+1. 导出获取项目级写锁，锁的 `operation` 为 `epub`；记录 `project_id`、`source_head_transaction_id` 和 `source_head_commit_hash`，在同一锁保护下冻结正文清单与完整 plan 快照。
+2. 构建先写项目内临时目录，生成 EPUB 和 `export-manifest.json`。清单包含不可变 `project_id`、确定性 `build_id = epub-<headSHA前12位>-<plan清单SHA前12位>`、`source_head_transaction_id`、`source_head_commit_hash`、原始书名、安全目录名、所有导出 node ID、正文 SHA-256、`epub_path`、`epub_sha256`、`plan_snapshot_sha256`、plan 相对路径与 SHA-256，以及脚本契约版本。同一源重试复用 build ID 和 staging，不重复创建不同结果。
 3. `$env:OneDrive` 缺失或目标不可写时整体失败，不声称同步成功，也不改已有目标。
 4. 选择目标目录前，在 OneDrive 小说根的 `.mynovel-locks/` 中按"安全书名规范化结果的 SHA-256"原子创建排他目标锁；同一安全书名族在锁释放前只能有一个发布者。过期锁复核锁文件哈希与未完成发布状态后 CAS 改名再获取恢复锁，不得直接删除。
 5. 默认目标仍为 `$env:OneDrive\小说\《安全书名》\`：

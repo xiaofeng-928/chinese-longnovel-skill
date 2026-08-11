@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import hashlib
+import datetime
 import json
 import os
 import re
@@ -72,6 +73,25 @@ def sha256_text(text: str) -> str:
     return sha256_bytes(text.encode("utf-8"))
 
 
+def canonical_json_hash(data: dict, excluded: tuple[str, ...] = ()) -> str:
+    payload = {key: value for key, value in data.items() if key not in excluded}
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return sha256_bytes(encoded)
+
+
+def project_relative_path(project_root: Path, raw_path: str) -> tuple[str, Path]:
+    """Return a normalized project-relative path and reject traversal/absolute paths."""
+    if not raw_path or "\\" in raw_path or Path(raw_path).is_absolute():
+        raise ValueError(f"asset path must be a forward-slash project-relative path: {raw_path}")
+    resolved_root = project_root.resolve()
+    resolved = (project_root / raw_path).resolve()
+    if not resolved.is_relative_to(resolved_root):
+        raise ValueError(f"asset path escapes project root: {raw_path}")
+    return resolved.relative_to(resolved_root).as_posix(), resolved
+
+
 def atomic_write_bytes(path: Path, data: bytes) -> None:
     """原子写：先写同目录临时文件，再 os.replace。"""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -95,11 +115,10 @@ def new_uuid() -> str:
 
 
 def utc_timestamp() -> str:
-    return f"{__import__('datetime').datetime.now(datetime.timezone.utc):%Y-%m-%dT%H:%M:%S%z}"
+    return f"{datetime.datetime.now(datetime.timezone.utc):%Y-%m-%dT%H:%M:%S%z}"
 
 
 def now_iso() -> str:
-    import datetime
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
@@ -169,7 +188,9 @@ def validate_manifest(project_root: Path, project_id: str | None = None):
     pid = core.get("project_id")
     if pid:
         try:
-            uuid_module.UUID(pid)
+            parsed_pid = uuid_module.UUID(pid)
+            if parsed_pid.version != 4 or str(parsed_pid) != pid:
+                errors.append("project_id must be canonical lowercase UUID v4")
         except ValueError:
             errors.append(f"project_id is not a valid UUID: {pid}")
     elif not errors:
@@ -185,9 +206,59 @@ def validate_manifest(project_root: Path, project_id: str | None = None):
         except ValueError:
             errors.append("目标章数下限 must be an integer")
 
+    for key in ("legacy_scope", "经营主线"):
+        if key in core and core[key] not in ("true", "false"):
+            errors.append(f"{key} must be true or false")
+
+    if core.get("migration_state") == "staging" and core.get("operation_mode") != "migration":
+        errors.append("staging migration_state requires operation_mode migration")
+    if core.get("migration_state") == "active" and core.get("operation_mode") not in (
+        "normal", "maintenance", "epub"
+    ):
+        errors.append("active migration_state requires normal, maintenance, or epub operation_mode")
+    if core.get("legacy_scope") == "true":
+        for key in ("legacy_source_hash", "legacy_snapshot_path"):
+            if core.get(key) in (None, "", "null"):
+                errors.append(f"legacy project requires {key}")
+        if core.get("产品类型") != "legacy-long-form":
+            errors.append("legacy_scope true requires 产品类型 legacy-long-form")
+    elif core.get("产品类型") == "legacy-long-form":
+        errors.append("产品类型 legacy-long-form requires legacy_scope true")
+    if core.get("legacy_scope") == "false" and core.get("系统模式") != "required":
+        errors.append("vNext new project requires 系统模式 required")
+    if core.get("legacy_scope") == "false" and core.get("经营主线") != "true":
+        errors.append("vNext new project requires 经营主线 true")
+    if core.get("legacy_scope") == "false" and core.get("目标章数下限"):
+        try:
+            if int(core["目标章数下限"]) < 1000:
+                errors.append("vNext new project target must be at least 1000 chapters")
+        except ValueError:
+            pass
+
+    for key in ("当前计划窗口", "下一计划窗口"):
+        value = core.get(key)
+        if value not in (None, "null") and not re.fullmatch(r"第[1-9][0-9]*-[1-9][0-9]*章", value):
+            errors.append(f"{key} must be 第X-Y章 or null")
+    for key in ("文风版本", "系统设定版本"):
+        value = core.get(key)
+        if value not in (None, "null") and not re.fullmatch(r"v[0-9]+\.[0-9]+", value):
+            errors.append(f"{key} must be vN.N or null")
+    value = core.get("文风生效节点")
+    if value not in (None, "null") and not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,63}", value):
+        errors.append("文风生效节点 must be a node_id or null")
+    value = core.get("最近迁移日期")
+    if value not in (None, "null"):
+        try:
+            datetime.date.fromisoformat(value)
+        except ValueError:
+            errors.append("最近迁移日期 must be YYYY-MM-DD or null")
+
     # 权威路径必须是项目根相对路径
     for key, value in authority.items():
         if value == "null":
+            continue
+        if not value or Path(value).is_absolute() or "\\" in value:
+            errors.append(f"authority path must be a non-empty forward-slash relative path: {value}")
             continue
         target = (project_root / value).resolve()
         if not target.is_relative_to(project_root.resolve()):
@@ -284,6 +355,9 @@ class WriteLock:
             raise RuntimeError("malformed lock lease; manual inspection required")
         if lease > datetime.datetime.now(datetime.timezone.utc):
             raise PermissionError("lock is not stale")
+        expected_head = current.get("base_head_sha256", "")
+        if expected_head and expected_head != head_hash(self.project_root):
+            raise RuntimeError("stale lock base head changed; manual recovery required")
         lock_hash = sha256_file(self.lock_path)
         stale_dir.mkdir(parents=True, exist_ok=True)
         stale_target = stale_dir / f"stale-lock-{current['lock_id']}.json"
@@ -304,20 +378,29 @@ def atomic_write_json(path: Path, data) -> None:
     atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def genesis_head(project_id: str) -> dict:
-    return {
+def genesis_head(project_id: str, projection_hashes: dict | None = None) -> dict:
+    head = {
         "project_id": project_id,
         "head_transaction_id": "tx-genesis",
         "parent_transaction_id": None,
         "generation_id": "gen-0001",
         "committed_node_id": None,
-        "projection_hashes": {},
+        "projection_hashes": dict(projection_hashes or {}),
+        "chain_hash": sha256_text(f"{project_id}:tx-genesis"),
     }
+    head["commit_hash"] = canonical_json_hash(head, ("commit_hash",))
+    return head
 
 
-def create_genesis(project_root: Path, project_id: str) -> dict:
-    head = genesis_head(project_id)
-    atomic_write_json(project_root / COMMIT_HEAD_PATH, head)
+def create_genesis(project_root: Path, project_id: str,
+                   projection_hashes: dict | None = None) -> dict:
+    path = project_root / COMMIT_HEAD_PATH
+    if path.exists():
+        raise FileExistsError(f"genesis already exists: {path}")
+    head = genesis_head(project_id, projection_hashes)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8", newline="\n") as stream:
+        json.dump(head, stream, ensure_ascii=False, indent=2)
     return head
 
 
@@ -339,13 +422,59 @@ def tx_manifest_path(project_root: Path, transaction_id: str) -> Path:
 def prepare_transaction(project_root: Path, *, project_id: str, parent_transaction_id: str,
                         generation_id: str, base_head_sha256: str, node_id: str,
                         attempt_id: str, assets: dict, sequence_event: dict | None = None,
+                        review_evidence: dict | None = None,
                         transaction_id: str | None = None) -> dict:
     """创建不可变事务清单。assets 为 {relative_path: sha256}，增量块哈希由调用方提供。"""
     if transaction_id is None:
         import datetime
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         transaction_id = f"tx-{node_id}-{stamp}-{uuid_module.uuid4().hex[:8]}"
-    manifest = {
+    if not isinstance(assets, dict):
+        raise ValueError("assets must be a mapping of project-relative path to sha256")
+    required_review_evidence = {
+        "naturalization_review_sha256", "context_review_sha256",
+        "state_validation_report_sha256",
+    }
+    if not isinstance(review_evidence, dict) or not required_review_evidence.issubset(review_evidence):
+        raise ValueError("review_evidence must contain both review hashes and state validation hash")
+    for key in required_review_evidence:
+        if not re.fullmatch(r"[0-9a-f]{64}", str(review_evidence[key])):
+            raise ValueError(f"invalid review evidence hash: {key}")
+    transaction_dir = tx_manifest_path(project_root, transaction_id).parent
+    transaction_dir.mkdir(parents=True, exist_ok=False)
+    immutable_assets = {}
+    try:
+        for raw_path, expected_hash in sorted(assets.items()):
+            relative, source = project_relative_path(project_root, str(raw_path))
+            if not source.is_file():
+                raise FileNotFoundError(f"transaction asset missing: {relative}")
+            actual_hash = sha256_file(source)
+            if actual_hash != expected_hash:
+                raise ValueError(f"transaction asset hash mismatch: {relative}")
+            snapshot_relative = (Path("assets") / Path(relative)).as_posix()
+            snapshot = transaction_dir / snapshot_relative
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            with snapshot.open("xb") as stream:
+                stream.write(source.read_bytes())
+            immutable_assets[relative] = {
+                "sha256": actual_hash,
+                "snapshot_path": snapshot_relative,
+            }
+
+        evidence_paths = {
+            "naturalization_review_sha256": "reviews/naturalization.md",
+            "context_review_sha256": "reviews/context.md",
+            "state_validation_report_sha256": "reviews/state.md",
+        }
+        for evidence_key, suffix in evidence_paths.items():
+            matches = [
+                item for relative, item in immutable_assets.items()
+                if relative.endswith(suffix)
+            ]
+            if len(matches) != 1 or matches[0]["sha256"] != review_evidence[evidence_key]:
+                raise ValueError(f"review evidence is not backed by one immutable asset: {evidence_key}")
+
+        manifest = {
         "project_id": project_id,
         "transaction_id": transaction_id,
         "parent_transaction_id": parent_transaction_id,
@@ -353,14 +482,24 @@ def prepare_transaction(project_root: Path, *, project_id: str, parent_transacti
         "base_head_sha256": base_head_sha256,
         "node_id": node_id,
         "attempt_id": attempt_id,
-        "assets": assets,
+        "assets": immutable_assets,
         "sequence_event": sequence_event,
-    }
-    manifest["manifest_sha256"] = sha256_text(
-        json.dumps(manifest, ensure_ascii=False, sort_keys=True)
-    )
-    path = tx_manifest_path(project_root, transaction_id)
-    atomic_write_json(path, manifest)
+        "review_evidence": review_evidence,
+        "created_at": now_iso(),
+        }
+        manifest["manifest_sha256"] = canonical_json_hash(manifest, ("manifest_sha256",))
+        path = tx_manifest_path(project_root, transaction_id)
+        with path.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(manifest, stream, ensure_ascii=False, indent=2)
+    except Exception:
+        # Only the newly-created transaction directory is eligible for rollback.
+        for child in sorted(transaction_dir.rglob("*"), reverse=True):
+            if child.is_file():
+                child.unlink()
+            elif child.is_dir():
+                child.rmdir()
+        transaction_dir.rmdir()
+        raise
     return manifest
 
 
@@ -372,7 +511,11 @@ def chain_parents(project_root: Path, head: dict | None = None) -> list[dict]:
     chain = []
     seen = set()
     current_id = head.get("head_transaction_id")
-    while current_id and current_id not in seen:
+    if not current_id:
+        raise ValueError("broken chain: head transaction ID missing")
+    while True:
+        if current_id in seen:
+            raise ValueError(f"cycle detected at transaction {current_id}")
         seen.add(current_id)
         if current_id == "tx-genesis":
             chain.append({"transaction_id": "tx-genesis", "parent_transaction_id": None})
@@ -382,6 +525,8 @@ def chain_parents(project_root: Path, head: dict | None = None) -> list[dict]:
             raise ValueError(f"broken chain: transaction {current_id} missing")
         chain.append(mf)
         current_id = mf.get("parent_transaction_id")
+        if not current_id:
+            raise ValueError("broken chain: reached null before tx-genesis")
     return chain
 
 
@@ -393,12 +538,90 @@ def verify_chain(project_root: Path, project_id: str, base_head_sha256: str | No
         return False, ["commit-head.json missing"]
     if head.get("project_id") != project_id:
         errors.append("commit-head project_id mismatch")
+    stored_commit_hash = head.get("commit_hash")
+    if not stored_commit_hash:
+        errors.append("commit-head commit_hash missing")
+    elif stored_commit_hash != canonical_json_hash(head, ("commit_hash",)):
+        errors.append("commit-head commit_hash mismatch")
+    if not head.get("chain_hash"):
+        errors.append("commit-head chain_hash missing")
     if base_head_sha256 is not None and head_hash(project_root) != base_head_sha256:
         errors.append("commit-head hash mismatch")
     try:
         chain = chain_parents(project_root, head)
     except ValueError as exc:
         return False, [str(exc)]
+    for index, manifest in enumerate(chain[:-1]):
+        transaction_id = manifest.get("transaction_id")
+        if manifest.get("project_id") != project_id:
+            errors.append(f"transaction project_id mismatch: {transaction_id}")
+        if not transaction_id or tx_manifest_path(project_root, transaction_id).parent.name != transaction_id:
+            errors.append(f"transaction ID/path mismatch: {transaction_id}")
+        expected_hash = canonical_json_hash(manifest, ("manifest_sha256",))
+        if manifest.get("manifest_sha256") != expected_hash:
+            errors.append(f"transaction manifest hash mismatch: {transaction_id}")
+        if not manifest.get("generation_id"):
+            errors.append(f"transaction generation missing: {transaction_id}")
+        review_evidence = manifest.get("review_evidence")
+        required_evidence = {
+            "naturalization_review_sha256", "context_review_sha256",
+            "state_validation_report_sha256",
+        }
+        if not isinstance(review_evidence, dict) or not required_evidence.issubset(review_evidence):
+            errors.append(f"transaction review evidence missing: {transaction_id}")
+        elif any(not re.fullmatch(r"[0-9a-f]{64}", str(review_evidence[key])) for key in required_evidence):
+            errors.append(f"transaction review evidence invalid: {transaction_id}")
+        next_parent = chain[index + 1].get("transaction_id")
+        if manifest.get("parent_transaction_id") != next_parent:
+            errors.append(f"transaction parent mismatch: {transaction_id}")
+        assets = manifest.get("assets")
+        if not isinstance(assets, dict):
+            errors.append(f"transaction assets invalid: {transaction_id}")
+            continue
+        transaction_dir = tx_manifest_path(project_root, transaction_id).parent
+        for relative, asset_evidence in assets.items():
+            if not isinstance(asset_evidence, dict):
+                errors.append(f"transaction asset evidence invalid: {transaction_id}:{relative}")
+                continue
+            snapshot_raw = asset_evidence.get("snapshot_path", "")
+            try:
+                snapshot_relative, snapshot = project_relative_path(transaction_dir, snapshot_raw)
+            except ValueError:
+                errors.append(f"transaction asset snapshot path invalid: {transaction_id}:{relative}")
+                continue
+            if not snapshot_relative.startswith("assets/") or not snapshot.is_file():
+                errors.append(f"transaction asset snapshot missing: {transaction_id}:{relative}")
+            elif sha256_file(snapshot) != asset_evidence.get("sha256"):
+                errors.append(f"transaction asset hash mismatch: {transaction_id}:{relative}")
+        if isinstance(review_evidence, dict) and isinstance(assets, dict):
+            expected_suffixes = {
+                "naturalization_review_sha256": "reviews/naturalization.md",
+                "context_review_sha256": "reviews/context.md",
+                "state_validation_report_sha256": "reviews/state.md",
+            }
+            for evidence_key, suffix in expected_suffixes.items():
+                matches = [item for relative, item in assets.items() if relative.endswith(suffix)]
+                if (len(matches) != 1 or not isinstance(matches[0], dict)
+                        or matches[0].get("sha256") != review_evidence.get(evidence_key)):
+                    errors.append(
+                        f"transaction review evidence asset mismatch: {transaction_id}:{evidence_key}"
+                    )
+    if chain[-1].get("transaction_id") != "tx-genesis":
+        errors.append("chain does not reach tx-genesis")
+    if head.get("head_transaction_id") != "tx-genesis":
+        first = chain[0]
+        if head.get("parent_transaction_id") != first.get("parent_transaction_id"):
+            errors.append("commit-head parent does not match head transaction")
+        if head.get("generation_id") != first.get("generation_id"):
+            errors.append("commit-head generation does not match head transaction")
+    expected_chain_hash = sha256_text(
+        ":".join(
+            [project_id]
+            + [item.get("manifest_sha256", "tx-genesis") for item in reversed(chain)]
+        )
+    )
+    if head.get("chain_hash") and head.get("chain_hash") != expected_chain_hash:
+        errors.append("commit-head chain_hash mismatch")
     return not errors, errors
 
 
@@ -409,11 +632,65 @@ def commit_head_cas(project_root: Path, new_head: dict, base_head_sha256: str) -
         raise RuntimeError(
             f"compare-and-swap failed: current={current[:12]} base={base_head_sha256[:12]}"
         )
-    new_head["commit_hash"] = sha256_text(
-        json.dumps(new_head, ensure_ascii=False, sort_keys=True)
-    )
+    old_head = read_head(project_root)
+    if old_head is None:
+        raise RuntimeError("commit head missing")
+    if new_head.get("project_id") != old_head.get("project_id"):
+        raise ValueError("new head project_id mismatch")
+    new_transaction_id = new_head.get("head_transaction_id")
+    old_transaction_id = old_head.get("head_transaction_id")
+    if new_transaction_id != old_transaction_id:
+        manifest = load_json(tx_manifest_path(project_root, new_transaction_id))
+        if not manifest:
+            raise ValueError(f"new head transaction missing: {new_transaction_id}")
+        if manifest.get("project_id") != new_head.get("project_id"):
+            raise ValueError("new head transaction project_id mismatch")
+        if manifest.get("parent_transaction_id") != old_transaction_id:
+            raise ValueError("new head transaction parent is not current head")
+        if new_head.get("parent_transaction_id") != old_transaction_id:
+            raise ValueError("new head parent_transaction_id is not current head")
+        if new_head.get("generation_id") != manifest.get("generation_id"):
+            raise ValueError("new head generation does not match transaction")
+        chain = chain_parents(project_root, new_head)
+        new_head["chain_hash"] = sha256_text(
+            ":".join(
+                [new_head["project_id"]]
+                + [item.get("manifest_sha256", "tx-genesis") for item in reversed(chain)]
+            )
+        )
+    else:
+        new_head["chain_hash"] = old_head.get("chain_hash", new_head.get("chain_hash"))
+    new_head["commit_hash"] = canonical_json_hash(new_head, ("commit_hash",))
     atomic_write_json(project_root / COMMIT_HEAD_PATH, new_head)
     return new_head["commit_hash"]
+
+
+def materialize_transaction_assets(project_root: Path, transaction_id: str,
+                                   relative_paths: list[str]) -> dict[str, str]:
+    """Materialize selected immutable snapshots after their transaction becomes current head."""
+    head = read_head(project_root)
+    if not head or head.get("head_transaction_id") != transaction_id:
+        raise ValueError("only the current head transaction may materialize projections")
+    manifest = load_json(tx_manifest_path(project_root, transaction_id))
+    if not manifest:
+        raise FileNotFoundError(f"transaction missing: {transaction_id}")
+    ok, errors = verify_chain(project_root, head.get("project_id", ""))
+    if not ok:
+        raise ValueError(f"cannot materialize invalid chain: {errors}")
+    assets = manifest.get("assets", {})
+    result = {}
+    transaction_dir = tx_manifest_path(project_root, transaction_id).parent
+    for raw in relative_paths:
+        relative, target = project_relative_path(project_root, raw)
+        evidence = assets.get(relative)
+        if not evidence:
+            raise ValueError(f"transaction does not own projection asset: {relative}")
+        _, snapshot = project_relative_path(transaction_dir, evidence["snapshot_path"])
+        if not snapshot.is_file() or sha256_file(snapshot) != evidence["sha256"]:
+            raise ValueError(f"immutable projection asset invalid: {relative}")
+        atomic_write_bytes(target, snapshot.read_bytes())
+        result[relative] = evidence["sha256"]
+    return result
 
 
 def rebase_start(project_root: Path, *, project_id: str, base_head_transaction_id: str,

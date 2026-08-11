@@ -68,10 +68,10 @@ class TestStageOutlineMemorySyncDocs(unittest.TestCase):
         project = read_doc("references/项目定位.md")
 
         for phrase in [
-            "细纲审查通过后",
-            "角色卡、反派画像、称谓辈分和禁写清单写入 `novel-config.md`",
-            "总大纲只在阶段目标、主线/反派线、伏笔追踪或下阶段铺垫发生变化时更新",
-            "写回",
+            "设定/角色档案.md",
+            "配置只保存版本、状态和相对路径",
+            "MYNOVEL:PLAN-NODE",
+            "大纲是计划态",
         ]:
             self.assertIn(phrase, project)
 
@@ -93,40 +93,31 @@ class TestStageOutlineMemorySyncDocs(unittest.TestCase):
         self.assertNotIn("| 写回 `novel-config.md` | 写回总大纲 |", prompt)
 
     def test_file_structure_defines_authoritative_sync_targets_without_duplication(self):
-        structure = read_doc("references/文件结构与锚点.md")
+        structure = read_doc("references/项目结构与迁移.md")
 
         for phrase in [
-            "细纲记忆同步",
-            "`novel-config.md` 是角色、能力与金手指设计的唯一权威源",
-            "金手指设计档案",
-            "总大纲不是角色卡副本",
-            "只在宏观剧情结构变化时更新",
-            "只增补缺失画像",
+            "50 章计划态",
+            "设定/角色档案.md",
+            "当前运行态投影",
+            "不可变 summary/state delta",
+            "不得存放",
         ]:
             self.assertIn(phrase, structure)
 
-    def test_stage_outline_review_requires_prior_48_outline_cleanup(self):
-        project = read_doc("references/项目定位.md")
-        prompt = read_doc("prompts/分阶段大纲细化提示词.md")
-
-        for phrase in [
-            "第51-100章细纲",
-            "前48章大纲",
-            "第49-50章",
-            "边界未写章节细纲",
-        ]:
-            self.assertIn(phrase, project)
-            self.assertIn(phrase, prompt)
+    def test_stage_and_plan_nodes_have_deterministic_schema(self):
+        structure = read_doc("references/项目结构与迁移.md")
+        for phrase in ["MYNOVEL:STAGE", "MYNOVEL:PLAN-NODE", "planned_main_chapter",
+                       "plan_status", "task_refs", "node_type"]:
+            self.assertIn(phrase, structure)
 
     def test_config_compresses_only_dead_or_offline_characters(self):
-        structure = read_doc("references/文件结构与锚点.md")
+        structure = read_doc("references/项目结构与迁移.md")
 
         for phrase in [
-            "仅处理已死亡/已下线角色",
-            "保留未死亡角色",
-            "已死亡、已下线",
-            "核心三项性格",
-            "移除“绝对不能写什么”",
+            "manifest，不再保存百科全文",
+            "控制在 60-100 行以内",
+            "只保存",
+            "设定/角色档案.md",
         ]:
             self.assertIn(phrase, structure)
 
@@ -384,7 +375,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
         for phrase in ["扫榜与开书", "开书流程.md", "扫榜与开书构思提示词.md"]:
             self.assertIn(phrase, skill)
-        for phrase in ["细纲计划", "正文实际", "structural"]:
+        for phrase in ["未审查 attempt", "状态回证", "state_validation_report_sha256"]:
             self.assertIn(phrase, summary)
         for phrase in ["自然化前后差异审查", "候选正文对项目上下文审查", "validate_chapter_candidate.py"]:
             self.assertIn(phrase, review)
@@ -410,9 +401,9 @@ class TestWorkflowContractDocs(unittest.TestCase):
         for doc, phrases in [
             (skill, ["细纲整理", "references/细纲整理流程.md"]),
             (prompt, ["不使用“草稿”", "不得擅自新增主要事件", "事件展开"]),
-            (process, ["不重新规划主线", "正文和上下文组装直接读取"]),
-            (sequence, ["第49(1)章", "最近 3 个有效节点", "最近 1 个“主线锚点”"]),
-            (context, ["有效节点组装", "已写出未审查", "第49(1)、第49(2)、第49(3)、第48章"]),
+            (process, ["不改写用户已经确定的核心事件", "MYNOVEL:PLAN-NODE"]),
+            (sequence, ["稳定 node ID", "最近 3 个有效节点正文", "最近 1 个 main 节点"]),
+            (context, ["未审查 attempt", "不是有效节点", "current commit head"]),
         ]:
             for phrase in phrases:
                 self.assertIn(phrase, doc)
@@ -423,9 +414,8 @@ class TestWorkflowContractDocs(unittest.TestCase):
         prompt = read_doc("prompts/分阶段大纲细化提示词.md")
 
         for doc in [project, prompt]:
-            self.assertIn("第1-50章", doc)
+            self.assertIn("第1-50章", doc.replace(" ", ""))
             self.assertIn("黄金三章微操细纲", doc)
-            self.assertIn("先生成", doc)
 
         self.assertIn("黄金三章微操细纲", skill)
         self.assertNotIn("第1-50章常规分阶段细纲", skill)
@@ -436,14 +426,14 @@ class TestWorkflowContractDocs(unittest.TestCase):
         self.assertIn("python 不可用", contract)
 
     def test_epub_sync_contract_in_skill_docs(self):
-        project = read_doc("references/项目定位.md")
+        project = read_doc("references/EPUB导出与同步.md")
 
         for phrase in [
             "$env:OneDrive\\小说",
-            "书名子文件夹",
-            "plan",
-            "检查",
-            "EPUB 和 plan 文件夹",
+            "project_id",
+            "source_head_commit_hash",
+            "plan_snapshot_sha256",
+            "逐项哈希",
         ]:
             self.assertIn(phrase, project)
 
@@ -569,8 +559,14 @@ class TestNaturalizationContracts(unittest.TestCase):
 
     def test_naturalization_stage_precedes_formal_review(self):
         skill = read_doc("SKILL.md")
-        self.assertIn("自然化", skill)
-        self.assertIn("审查", skill)
+        chain = next(line for line in skill.splitlines() if line.startswith("新书完整生产链为："))
+        self.assertLess(chain.index("正文自然化"), chain.index("草稿审查"))
+
+    def test_write_only_stops_before_summary_and_commit(self):
+        skill = read_doc("SKILL.md")
+        sentence = next(line for line in skill.splitlines() if line.startswith("- 用户只要求“写第X章”"))
+        for phrase in ["候选态", "不生成正式总结", "不更新状态仓库", "不推进 commit head"]:
+            self.assertIn(phrase, sentence)
 
     def test_root_does_not_advertise_ai_polish_as_independent_stage(self):
         root = (ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -582,6 +578,34 @@ class TestNaturalizationContracts(unittest.TestCase):
         naturalization = read_doc("prompts/正文自然化提示词.md")
         self.assertNotIn("/50", naturalization)
         self.assertIn("只包含修改后的完整章节", naturalization)
+
+    def test_humanizer_rules_are_self_contained_and_novel_adapted(self):
+        naturalization = read_doc("prompts/正文自然化提示词.md")
+        for phrase in [
+            "不读取或调用外部 Humanizer-zh Skill",
+            "过度强调意义和趋势",
+            "系动词回避",
+            "否定式排比",
+            "机械三段式",
+            "刻意换词和同义词循环",
+            "虚假范围",
+            "协作交流痕迹",
+            "知识截止与资料免责声明",
+            "通用积极结论",
+        ]:
+            self.assertIn(phrase, naturalization)
+
+    def test_humanizer_cannot_invent_or_flatten_novel_voice(self):
+        naturalization = read_doc("prompts/正文自然化提示词.md")
+        for phrase in [
+            "禁止把“更具体”理解为补造细节",
+            "角色声音趋同",
+            "爽点被中和",
+            "系统面板",
+            "表达已经自然时保持全文字节一致",
+            "不输出 50 分评分",
+        ]:
+            self.assertIn(phrase, naturalization)
 
     def test_third_party_notice_exists_with_source_hash(self):
         notice = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
@@ -714,7 +738,7 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
         context = read_doc("references/长篇上下文与一致性.md")
         repository = read_doc("references/状态与总结.md")
         summary = read_doc("references/状态与总结.md")
-        structure = read_doc("references/文件结构与锚点.md")
+        structure = read_doc("references/项目结构与迁移.md")
         for doc in [context, repository, summary, structure]:
             self.assertIn("总结/系统状态仓库.md", doc)
         self.assertIn("任意两项", repository)
@@ -736,38 +760,38 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
         ]:
             self.assertIn(phrase, review)
         self.assertIn("structural", repair)
-        self.assertIn("退回金手指阶段规划", repair)
+        self.assertIn("退回系统阶段规划", repair)
 
 
 class TestProtagonistStateRepositoryContracts(unittest.TestCase):
     def test_file_structure_defines_repository_as_current_state_authority(self):
-        structure = read_doc("references/文件结构与锚点.md")
+        structure = read_doc("references/项目结构与迁移.md")
         for phrase in [
             "总结/主角状态仓库.md",
             "当前真实状态",
-            "唯一当前状态权威源",
-            "总大纲只维护计划状态",
-            "章节总结只维护状态增量",
+            "当前运行态投影",
+            "总大纲",
+            "章节增量",
         ]:
             self.assertIn(phrase, structure)
 
     def test_summary_flow_records_deltas_without_copying_repository(self):
         summary = read_doc("references/状态与总结.md")
         for phrase in [
-            "主角状态增量",
-            "主角状态仓库同步",
+            "state delta",
+            "主角状态仓库",
             "不复制完整仓库",
-            "仓库是当前状态权威源",
+            "当前真实状态权威源",
         ]:
             self.assertIn(phrase, summary)
 
     def test_context_assembly_reads_repository_before_recent_deltas(self):
         context = read_doc("references/长篇上下文与一致性.md")
         for phrase in [
-            "主角状态仓库",
+            "总结/主角状态仓库.md",
             "当前真实状态",
-            "先读取仓库",
-            "章节总结中的状态增量",
+            "组装顺序",
+            "最近 20 个有效节点章节总结",
         ]:
             self.assertIn(phrase, context)
 

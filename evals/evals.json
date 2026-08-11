@@ -1,0 +1,57 @@
+{
+  "skill_name": "my-novel",
+  "evals": [
+    {
+      "id": 1,
+      "name": "naturalization-required-before-review",
+      "prompt": "我给你一章经营系统爽文草稿，事件和数值都对，但满篇是空泛总结、机械三段式和口号式金句。请说明按本 Skill 的完整审修流程会如何处理、保存哪些证据、何时允许提交。不要实际写小说，只输出执行方案。",
+      "expected_output": "自然化在正式审查前；候选绑定源/候选哈希和非空事实锁；两个独立审查与状态回证通过后才事务提交。",
+      "files": [],
+      "expectations": [
+        "明确写出正文自然化先于正式审查",
+        "提到源稿哈希、候选哈希与非空 fact-lock（字段名或等价中文均可）",
+        "提到 naturalization/context 两份独立审查",
+        "提到状态回证和 commit head CAS 前不得物化总结"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "naturalization-skip-without-overediting",
+      "prompt": "这章表达已经自然，事件、数值和角色声音都稳定。我明确要求不要为了润色而改字，但仍要接入后续审查。请说明 Skill 应如何处理；不要实际写小说。",
+      "expected_output": "允许 skipped，自然化候选与源稿字节完全一致，但仍保留 attempt、事实锁并进入双审查。",
+      "files": [],
+      "expectations": [
+        "允许 naturalization_result 为 skipped",
+        "要求 skipped 候选与源稿字节一致",
+        "不会因为无需改写而跳过事实锁或正式审查",
+        "不会产生无意义的过度编辑"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "naturalization-damage-is-blocked",
+      "prompt": "自然化前正文写‘生存点余额：1000’，候选误写成‘生存点余额：10000’，并把主角‘没有下车’改成‘下了车’。审查者说读起来更顺，建议直接通过。请按 Skill 判断并给出下一步；不要改文件。",
+      "expected_output": "数值与否定极性变化必须阻断；旧审查无效，新 attempt repair/revert 后重新双审查，不能写总结或提交。",
+      "files": [],
+      "expectations": [
+        "识别 numbers 与 polarity 失败",
+        "拒绝以表达更顺为理由通过",
+        "repair 或 revert 必须产生新 attempt 并重新双审查",
+        "阻止总结、状态仓库和 commit head 更新"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "opening-reuses-fresh-rank-scan",
+      "prompt": "我要开一本番茄经营系统爽文。项目已有 7 天前的合格扫榜归档、参考素材和文风规范。我擅长移动基地经营。请说明开书流程下一步，不要问我短中长篇，也不要重新从零盘问主角所有设定。",
+      "expected_output": "复用新鲜扫榜证据，先分析题材爽点并与移动基地经营优势组装个人方案，默认 1000 章以上，再进入系统/总纲规划。",
+      "files": [],
+      "expectations": [
+        "复用 30 天内匹配的扫榜归档",
+        "先把题材规律与用户经营优势组装成开书方案",
+        "不询问短篇中篇长篇",
+        "新项目默认规划 1000 章以上"
+      ]
+    }
+  ]
+}
