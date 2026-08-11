@@ -37,7 +37,7 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 
 - 在 `D:\ai小说` 搜索文件或文本时只使用 PowerShell 原生命令，如 `Get-ChildItem`、`Select-String`、`Where-Object`；不使用 `rg`、`ripgrep` 或 `grep`。
 - 修改正文、总结、配置或大纲前先完成项目定位；同一章存在多个正文文件时停止并让用户确认权威文件。
-- 正文生成、续写、草稿审查和自动修复不得跳过 `references/上下文组装.md`；有效节点顺序以 `references/章节序列.md` 为准。
+- 正文生成、续写、草稿审查和自动修复不得跳过 `references/长篇上下文与一致性.md`；有效节点顺序以 `references/长篇上下文与一致性.md` 为准。
 - 正文必须服从本章正式细纲和已发生事实；不得擅自新增主线事件、角色、设定、能力或伏笔。
 - 写入归档文件时只替换目标章节或目标锚点块，不覆盖无关内容，不重复追加或破坏 HTML 锚点。
 
@@ -49,7 +49,7 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 | 草稿审查或自动修复 | 5 章 | 停止并要求拆分 |
 | 分阶段大纲细化 | 50 章 | 按 50 章归档段拆分 |
 
-章节范围按 `references/章节序列.md` 的有效节点解析；5 章是会话执行上限，大纲、总结和审查报告仍按 50 章文件归档。
+章节范围按 `references/长篇上下文与一致性.md` 的有效节点解析；5 章是会话执行上限，大纲、总结和审查报告仍按 50 章文件归档。
 
 ## 智能路由
 
@@ -61,23 +61,24 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 | 文风蒸馏 / 生成文风基因 / 更新范文文风档案 | 文风蒸馏 | `references/范文与创作依据.md`、`references/项目结构与迁移.md` | `prompts/范文结构与文风分析提示词.md` |
 | 仿写 / 对标范文开原创长篇 | 原创仿写 | `references/范文与创作依据.md`、`references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/范文结构与文风分析提示词.md`、`prompts/大纲生成提示词.md` |
 | 确定或融合项目文风 / 修改后续文风 | 项目文风确定 | `references/范文与创作依据.md`、`references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/项目文风规范提示词.md` |
-| 文风校准 / 连续章节文风偏移 | 文风校准 | `references/范文与创作依据.md`、`references/上下文组装.md` | 无 |
+| 文风校准 / 连续章节文风偏移 | 文风校准 | `references/范文与创作依据.md`、`references/长篇上下文与一致性.md` | 无 |
 | 新小说 / 新建小说 / 粘贴新总大纲 | 新小说初始化 | `references/项目定位.md`、`references/项目结构与迁移.md` | 无 |
 | 大纲 / 总大纲 / 规划剧情 | 大纲生成 | `references/项目定位.md` | `prompts/大纲生成提示词.md` |
-| 设计系统或金手指 / 重构金手指 | 金手指设计/重构 | `references/项目定位.md`、`references/金手指设计与运营.md` | `prompts/金手指设计提示词.md` |
-| 规划阶段金手指发展 | 金手指阶段规划 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/金手指设计与运营.md` | `prompts/金手指阶段规划提示词.md` |
+| 设计系统或金手指 / 重构系统 | 系统设计/重构 | `references/项目定位.md`、`references/系统设计与运营.md` | `prompts/系统设计提示词.md` |
+| 规划阶段系统发展 | 系统阶段规划 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/系统设计与运营.md` | `prompts/系统阶段规划提示词.md` |
 | 细化大纲 / 第X-X章大纲 | 分阶段大纲细化 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/分阶段大纲细化提示词.md` |
-| 整理手写或笼统细纲 | 细纲整理 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/细纲整理流程.md`、`references/章节序列.md` | `prompts/细纲整理提示词.md` |
+| 整理手写或笼统细纲 | 细纲整理 | `references/项目定位.md`、`references/项目结构与迁移.md`、`references/细纲整理流程.md`、`references/长篇上下文与一致性.md` | `prompts/细纲整理提示词.md` |
 | 黄金三章 / 前三章微操 | 黄金三章微操细纲 | `references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/黄金三章微操细纲提示词.md` |
-| 写第X章 / 正文 / 写下一章 | 正文生成 | `references/上下文组装.md`、`references/正文生产与审修.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/正文生成提示词.md` |
-| 审查草稿 / 检查草稿 | 草稿审查 | `references/上下文组装.md`、`references/正文生产与审修.md`、`references/项目结构与迁移.md`、`references/自动化脚本契约.md` | `prompts/正文审查与修复提示词.md` |
-| 审查并修复 / review and fix | 草稿审查后自动修复 | `references/上下文组装.md`、`references/正文生产与审修.md`、`references/正文生产与审修.md` | `prompts/正文审查与修复提示词.md`、`prompts/正文审查与修复提示词.md` |
-| 修复第X章 / fix / 修复自然化或审查发现的问题 | 自动修复 | `references/上下文组装.md`、`references/正文生产与审修.md` | `prompts/正文审查与修复提示词.md` |
+| 写第X章 / 正文 / 写下一章 | 正文生成 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/总结流程.md`、`references/长篇上下文与一致性.md` | `prompts/正文生成提示词.md` |
+| 审查草稿 / 检查草稿 | 草稿审查 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/项目结构与迁移.md`、`references/自动化脚本契约.md` | `prompts/正文审查与修复提示词.md` |
+| 审查并修复 / review and fix | 草稿审查后自动修复 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/正文生产与审修.md` | `prompts/正文审查与修复提示词.md`、`prompts/正文审查与修复提示词.md` |
+| 修复第X章 / fix / 修复自然化或审查发现的问题 | 自动修复 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md` | `prompts/正文审查与修复提示词.md` |
 | 修好了 / 已修复 / 修改完毕 | 修复确认 | `references/正文生产与审修.md`、`references/项目结构与迁移.md` | 无 |
 | 总结第X章 / 章节总结 | 章节总结 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
-| 一致性 / 矛盾 / 对不上 | 一致性检查 | `references/一致性检查.md`、`references/上下文组装.md` | 无 |
-| 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/上下文组装.md`、`references/正文生产与审修.md`、`references/总结流程.md`、`references/章节序列.md` | `prompts/正文生成提示词.md` |
+| 一致性 / 矛盾 / 对不上 | 一致性检查 | `references/长篇上下文与一致性.md`、`references/长篇上下文与一致性.md` | 无 |
+| 续写 / 继续写 / 接着写 | 续写并生成草稿 | `references/长篇上下文与一致性.md`、`references/正文生产与审修.md`、`references/总结流程.md`、`references/长篇上下文与一致性.md` | `prompts/正文生成提示词.md` |
 | 今天小说就到这 / 本轮章节结束 | 会话结束流程 | `references/总结流程.md`、`references/项目结构与迁移.md` | 无 |
+| 生成 EPUB / 导出电子书 | EPUB 导出与同步 | `references/EPUB导出与同步.md`、`references/项目结构与迁移.md` | 无 |
 
 ## 工作流组合
 

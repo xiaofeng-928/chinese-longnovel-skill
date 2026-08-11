@@ -202,6 +202,57 @@ class TestGenesisAndChain(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             tx.commit_head_cas(root, dict(tx.read_head(root)), base)
 
+    def test_rebase_start_sets_maintenance_mode(self):
+        root = self.make_project()
+        tx.create_genesis(root, PROJECT_ID)
+        base = tx.head_hash(root)
+        manifest = tx.rebase_start(
+            root,
+            project_id=PROJECT_ID,
+            base_head_transaction_id="tx-genesis",
+            old_generation_id="gen-0001",
+            new_generation_id="gen-0002",
+            base_head_sha256=base,
+        )
+        head = tx.read_head(root)
+        self.assertEqual(head["operation_mode"], "maintenance")
+        self.assertEqual(head["generation_id"], "gen-0002")
+        self.assertEqual(head["rebase_id"], manifest["rebase_id"])
+        self.assertTrue((root / "修复记录" / "生产状态" / "rebases" / manifest["rebase_id"] / "manifest.json").is_file())
+
+    def test_rebase_abort_restores_normal_mode(self):
+        root = self.make_project()
+        tx.create_genesis(root, PROJECT_ID)
+        base = tx.head_hash(root)
+        tx.rebase_start(root, project_id=PROJECT_ID,
+                        base_head_transaction_id="tx-genesis",
+                        old_generation_id="gen-0001",
+                        new_generation_id="gen-0002",
+                        base_head_sha256=base)
+        head = tx.read_head(root)
+        tx.rebase_abort(root, project_id=PROJECT_ID,
+                        base_head_sha256=tx.head_hash(root),
+                        head_transaction_id="tx-genesis",
+                        generation_id="gen-0001")
+        head = tx.read_head(root)
+        self.assertEqual(head["operation_mode"], "normal")
+        self.assertEqual(head["generation_id"], "gen-0001")
+
+    def test_plan_activation_switches_window(self):
+        root = self.make_project()
+        tx.create_genesis(root, PROJECT_ID)
+        base = tx.head_hash(root)
+        tx.plan_activation(
+            root, project_id=PROJECT_ID, base_head_sha256=base,
+            head_transaction_id="tx-genesis", generation_id="gen-0001",
+            current_window="第51-100章", next_window=None,
+            current_plot_path="plan/大纲_第51-100章.md", next_plot_path=None,
+            current_system_path="plan/系统发展_第51-100章.md", next_system_path=None,
+        )
+        head = tx.read_head(root)
+        self.assertEqual(head["current_window"], "第51-100章")
+        self.assertIsNone(head["next_window"])
+
 
 class TestValidateProjectScript(unittest.TestCase):
     def run_validator(self, project_root, expect_fail=False):

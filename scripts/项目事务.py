@@ -414,3 +414,93 @@ def commit_head_cas(project_root: Path, new_head: dict, base_head_sha256: str) -
     )
     atomic_write_json(project_root / COMMIT_HEAD_PATH, new_head)
     return new_head["commit_hash"]
+
+
+def rebase_start(project_root: Path, *, project_id: str, base_head_transaction_id: str,
+                 old_generation_id: str, new_generation_id: str,
+                 base_head_sha256: str, rebase_id: str | None = None) -> dict:
+    """提交 rebase_start 控制事务，把 operation_mode 设为 maintenance。
+
+    同一次 head CAS 中保存 rebase_id、base_head_transaction_id、新旧代际和
+    operation_mode: maintenance。commit head 中的 operation mode 是运行时权威，
+    manifest 只是其物化镜像。
+    """
+    if rebase_id is None:
+        rebase_id = f"rebase-{uuid_module.uuid4().hex[:12]}"
+    new_head = dict(read_head(project_root) or genesis_head(project_id))
+    new_head.update({
+        "project_id": project_id,
+        "rebase_id": rebase_id,
+        "base_head_transaction_id": base_head_transaction_id,
+        "old_generation_id": old_generation_id,
+        "new_generation_id": new_generation_id,
+        "generation_id": new_generation_id,
+        "operation_mode": "maintenance",
+    })
+    commit_head_cas(project_root, new_head, base_head_sha256)
+    rebase_dir = project_root / "修复记录" / "生产状态" / "rebases" / rebase_id
+    rebase_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "rebase_id": rebase_id,
+        "project_id": project_id,
+        "base_head_transaction_id": base_head_transaction_id,
+        "old_generation_id": old_generation_id,
+        "new_generation_id": new_generation_id,
+        "operation_mode": "maintenance",
+        "created_at": now_iso(),
+    }
+    atomic_write_json(rebase_dir / "manifest.json", manifest)
+    return manifest
+
+
+def rebase_abort(project_root: Path, *, project_id: str, base_head_sha256: str,
+                 head_transaction_id: str, generation_id: str) -> dict:
+    """提交 rebase_abort 控制事务，把 head 切回旧 generation 并恢复 normal。"""
+    new_head = dict(read_head(project_root) or genesis_head(project_id))
+    new_head.update({
+        "project_id": project_id,
+        "head_transaction_id": head_transaction_id,
+        "generation_id": generation_id,
+        "operation_mode": "normal",
+        "rebase_id": None,
+    })
+    commit_head_cas(project_root, new_head, base_head_sha256)
+    return new_head
+
+
+def rebase_complete(project_root: Path, *, project_id: str, base_head_sha256: str,
+                    head_transaction_id: str, generation_id: str) -> dict:
+    """rebase 全部后继节点验证通过后，原子切回 normal。"""
+    new_head = dict(read_head(project_root) or genesis_head(project_id))
+    new_head.update({
+        "project_id": project_id,
+        "head_transaction_id": head_transaction_id,
+        "generation_id": generation_id,
+        "operation_mode": "normal",
+        "rebase_id": None,
+    })
+    commit_head_cas(project_root, new_head, base_head_sha256)
+    return new_head
+
+
+def plan_activation(project_root: Path, *, project_id: str, base_head_sha256: str,
+                    head_transaction_id: str, generation_id: str,
+                    current_window: str, next_window: str,
+                    current_plot_path: str | None, next_plot_path: str | None,
+                    current_system_path: str | None, next_system_path: str | None) -> dict:
+    """双窗口协议：当前窗口最后一个 main 节点 committed 后切换窗口。"""
+    new_head = dict(read_head(project_root) or genesis_head(project_id))
+    new_head.update({
+        "project_id": project_id,
+        "head_transaction_id": head_transaction_id,
+        "generation_id": generation_id,
+        "operation_mode": "normal",
+        "current_window": current_window,
+        "next_window": next_window,
+        "current_plot_path": current_plot_path,
+        "next_plot_path": next_plot_path,
+        "current_system_path": current_system_path,
+        "next_system_path": next_system_path,
+    })
+    commit_head_cas(project_root, new_head, base_head_sha256)
+    return new_head

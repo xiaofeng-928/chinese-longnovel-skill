@@ -404,8 +404,8 @@ class TestWorkflowContractDocs(unittest.TestCase):
         skill = read_doc("SKILL.md")
         prompt = read_doc("prompts/细纲整理提示词.md")
         process = read_doc("references/细纲整理流程.md")
-        sequence = read_doc("references/章节序列.md")
-        context = read_doc("references/上下文组装.md")
+        sequence = read_doc("references/长篇上下文与一致性.md")
+        context = read_doc("references/长篇上下文与一致性.md")
 
         for doc, phrases in [
             (skill, ["细纲整理", "references/细纲整理流程.md"]),
@@ -489,10 +489,10 @@ class TestStyleDistillationContracts(unittest.TestCase):
             self.assertIn(phrase, structure + reference)
 
     def test_context_assembly_reads_project_style_and_blocks_source(self):
-        context = read_doc("references/上下文组装.md")
+        context = read_doc("references/长篇上下文与一致性.md")
 
         for phrase in [
-            "文风/项目文风规范.md",
+            "创作依据/文风规范.md",
             "文风执行表",
             "禁止把范文 `正文.txt`",
             "文风分析报告",
@@ -641,20 +641,20 @@ class TestGoldfingerDesignContracts(unittest.TestCase):
 class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
     def test_skill_routes_design_and_stage_planning(self):
         skill = read_doc("SKILL.md")
-        reference = read_doc("references/金手指设计与运营.md")
-        prompt = read_doc("prompts/金手指阶段规划提示词.md")
+        reference = read_doc("references/系统设计与运营.md")
+        prompt = read_doc("prompts/系统阶段规划提示词.md")
         for phrase in [
-            "金手指设计/重构",
-            "金手指阶段规划",
-            "references/金手指设计与运营.md",
-            "prompts/金手指设计提示词.md",
-            "prompts/金手指阶段规划提示词.md",
+            "系统设计/重构",
+            "系统阶段规划",
+            "references/系统设计与运营.md",
+            "prompts/系统设计提示词.md",
+            "prompts/系统阶段规划提示词.md",
         ]:
             self.assertIn(phrase, skill)
-        self.assertIn("plan/金手指发展_第X-Y章.md", reference + prompt)
+        self.assertIn("plan/系统发展_第X-Y章.md", reference + prompt)
 
     def test_design_prompt_makes_ai_propose_and_stress_test(self):
-        prompt = read_doc("prompts/金手指设计提示词.md")
+        prompt = read_doc("prompts/系统设计提示词.md")
         for phrase in [
             "2-3套",
             "推荐方案",
@@ -669,7 +669,7 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
             self.assertIn(phrase, prompt)
 
     def test_reference_defines_task_engine_and_store_boundaries(self):
-        reference = read_doc("references/金手指设计与运营.md")
+        reference = read_doc("references/系统设计与运营.md")
         for phrase in [
             "小说类型与金手指机制正交",
             "系统商店",
@@ -684,7 +684,7 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
             self.assertIn(phrase, reference)
 
     def test_stage_plan_owns_store_task_and_five_chapter_cycle(self):
-        prompt = read_doc("prompts/金手指阶段规划提示词.md")
+        prompt = read_doc("prompts/系统阶段规划提示词.md")
         for phrase in [
             "资源预算",
             "系统商店快照",
@@ -694,7 +694,7 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
             "奖励预算",
             "五章玩法循环",
             "战略跃升",
-            "plan/金手指发展_第X-Y章.md",
+            "plan/系统发展_第X-Y章.md",
         ]:
             self.assertIn(phrase, prompt)
 
@@ -711,12 +711,12 @@ class TestGoldfingerDesignCapabilityContracts(unittest.TestCase):
             self.assertIn(phrase, prompt)
 
     def test_context_and_summary_support_optional_separate_repository(self):
-        context = read_doc("references/上下文组装.md")
+        context = read_doc("references/长篇上下文与一致性.md")
         repository = read_doc("references/主角状态仓库.md")
         summary = read_doc("references/总结流程.md")
         structure = read_doc("references/文件结构与锚点.md")
         for doc in [context, repository, summary, structure]:
-            self.assertIn("总结/金手指状态仓库.md", doc)
+            self.assertIn("总结/系统状态仓库.md", doc)
         self.assertIn("任意两项", repository)
         self.assertIn("禁止双重权威", repository)
 
@@ -762,7 +762,7 @@ class TestProtagonistStateRepositoryContracts(unittest.TestCase):
             self.assertIn(phrase, summary)
 
     def test_context_assembly_reads_repository_before_recent_deltas(self):
-        context = read_doc("references/上下文组装.md")
+        context = read_doc("references/长篇上下文与一致性.md")
         for phrase in [
             "主角状态仓库",
             "当前真实状态",
@@ -789,7 +789,7 @@ class TestProtagonistStateRepositoryContracts(unittest.TestCase):
             self.assertIn("主角状态仓库", doc)
 
     def test_consistency_check_uses_repository_as_dynamic_state_source(self):
-        consistency = read_doc("references/一致性检查.md")
+        consistency = read_doc("references/长篇上下文与一致性.md")
         for phrase in [
             "总结/主角状态仓库.md",
             "当前真实状态",
