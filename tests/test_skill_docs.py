@@ -139,13 +139,13 @@ class TestWorkflowContractDocs(unittest.TestCase):
             "范文入库",
             "范文拆书",
             "原创仿写",
-            "references/范文拆书与仿写流程.md",
-            "prompts/拆书与仿写提示词.md",
+            "references/范文与创作依据.md",
+            "prompts/范文结构与文风分析提示词.md",
         ]:
             self.assertIn(phrase, skill)
 
     def test_long_form_example_library_contract_is_platform_then_genre(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
             r"D:\ai小说\小说\范文",
@@ -159,7 +159,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
     def test_rank_scan_promotes_selected_candidates_without_implying_full_text(self):
         scan = read_doc("references/开书流程.md")
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in ["范文候选", "建立元数据范文", "正文状态：待导入"]:
             self.assertIn(phrase, scan)
@@ -167,8 +167,8 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, workflow)
 
     def test_imitation_requires_project_level_migration_and_originality_gate(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
-        prompt = read_doc("prompts/拆书与仿写提示词.md")
+        workflow = read_doc("references/范文与创作依据.md")
+        prompt = read_doc("prompts/范文结构与文风分析提示词.md")
 
         for phrase in [
             "参考素材.md",
@@ -183,14 +183,14 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, workflow + prompt)
 
     def test_reference_driven_new_project_has_no_initialization_cycle(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
         project = read_doc("references/项目定位.md")
 
         for phrase in ["范文驱动预初始化", "待生成总大纲", "最小项目壳"]:
             self.assertIn(phrase, workflow + project)
 
     def test_example_metadata_uses_fixed_states_and_outline_rechecks_originality(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
         outline = read_doc("prompts/大纲生成提示词.md")
 
         for phrase in [
@@ -204,8 +204,8 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, workflow + outline)
 
     def test_qidian_defaults_to_all_free_chapters_before_paid_boundary(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
-        prompt = read_doc("prompts/拆书与仿写提示词.md")
+        workflow = read_doc("references/范文与创作依据.md")
+        prompt = read_doc("prompts/范文结构与文风分析提示词.md")
 
         for phrase in [
             "起点官方公开章节默认连续获取到第一章完整收费正文之前",
@@ -221,13 +221,13 @@ class TestWorkflowContractDocs(unittest.TestCase):
         self.assertNotIn("默认最多保存第1-50章", workflow)
 
     def test_other_partial_sources_keep_a_bounded_default_range(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         self.assertIn("其他局部正文来源未约定范围时，默认规范化连续第1-50章", workflow)
         self.assertIn("默认分析范围仍为连续第1-50章", workflow)
 
     def test_qidian_chapter_acquisition_uses_official_mobile_pages_and_access_markers(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
             "https://m.qidian.com/book/<bookId>/",
@@ -245,8 +245,8 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, workflow)
 
     def test_partial_teardown_has_chapter_thresholds_and_evidence_boundary(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
-        prompt = read_doc("prompts/拆书与仿写提示词.md")
+        workflow = read_doc("references/范文与创作依据.md")
+        prompt = read_doc("prompts/范文结构与文风分析提示词.md")
 
         for phrase in [
             "少于30章",
@@ -267,7 +267,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
     def test_fanqie_scan_promotes_samples_as_metadata_for_manual_body_import(self):
         scan = read_doc("references/开书流程.md")
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
             "番茄范文候选",
@@ -279,7 +279,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, scan + workflow)
 
     def test_example_body_import_is_source_neutral_and_normalized(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
             "EPUB、TXT、Markdown",
@@ -292,8 +292,8 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, workflow)
 
     def test_large_example_body_is_indexed_and_read_in_chapter_chunks(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
-        prompt = read_doc("prompts/拆书与仿写提示词.md")
+        workflow = read_doc("references/范文与创作依据.md")
+        prompt = read_doc("prompts/范文结构与文风分析提示词.md")
 
         for phrase in [
             "写入本地文件不等于载入模型上下文",
@@ -307,7 +307,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
             self.assertIn(phrase, workflow + prompt)
 
     def test_large_import_is_preserved_while_default_analysis_stays_at_50(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
             "完整入库不等于全文分析",
@@ -320,7 +320,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
     def test_metadata_only_sample_does_not_require_a_teardown_report(self):
         skill = read_doc("SKILL.md")
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
             "元数据范文只复读 `元数据.md`",
@@ -456,14 +456,14 @@ class TestStyleDistillationContracts(unittest.TestCase):
             "文风蒸馏",
             "项目文风确定",
             "文风校准",
-            "references/文风蒸馏与执行流程.md",
-            "prompts/文风蒸馏提示词.md",
-            "prompts/项目文风编译提示词.md",
+            "references/范文与创作依据.md",
+            "prompts/范文结构与文风分析提示词.md",
+            "prompts/项目文风规范提示词.md",
         ]:
             self.assertIn(phrase, skill)
 
     def test_source_dir_defines_all_style_assets(self):
-        workflow = read_doc("references/范文拆书与仿写流程.md")
+        workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
             "文风统计报告.md",
@@ -476,12 +476,12 @@ class TestStyleDistillationContracts(unittest.TestCase):
             self.assertIn(phrase, workflow)
 
     def test_project_style_spec_is_unique_execution_authority(self):
-        structure = read_doc("references/文件结构与锚点.md")
-        reference = read_doc("references/文风蒸馏与执行流程.md")
+        structure = read_doc("references/项目结构与迁移.md")
+        reference = read_doc("references/范文与创作依据.md")
 
         for phrase in [
-            "文风/项目文风规范.md",
-            "唯一执行权威",
+            "创作依据/文风规范.md",
+            "唯一可执行的文风权威",
             "文风校准记录.md",
             "文风配置",
             "文风变更规则",
@@ -536,14 +536,14 @@ class TestStyleDistillationContracts(unittest.TestCase):
         self.assertIn("场景文风模式", stage)
 
     def test_teardown_prompt_does_not_generate_style_gene_inline(self):
-        prompt = read_doc("prompts/拆书与仿写提示词.md")
-        for phrase in ["不顺带生成文风基因", "文风蒸馏", "文风蒸馏提示词.md"]:
+        prompt = read_doc("prompts/范文结构与文风分析提示词.md")
+        for phrase in ["不顺带生成文风基因", "文风蒸馏", "范文结构与文风分析提示词.md"]:
             self.assertIn(phrase, prompt)
 
     def test_all_style_docs_forbid_identity_imitation_and_source_reuse(self):
-        reference = read_doc("references/文风蒸馏与执行流程.md")
-        distill = read_doc("prompts/文风蒸馏提示词.md")
-        compile_prompt = read_doc("prompts/项目文风编译提示词.md")
+        reference = read_doc("references/范文与创作依据.md")
+        distill = read_doc("prompts/范文结构与文风分析提示词.md")
+        compile_prompt = read_doc("prompts/项目文风规范提示词.md")
 
         for doc in [reference, distill, compile_prompt]:
             self.assertIn("化身作者", doc)

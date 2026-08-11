@@ -55,12 +55,12 @@ description: 网络小说写作工作流。覆盖长篇范文入库、拆书与�
 | 用户意图 | 工作流 | 必读参考文档 | 必读提示词 |
 |---|---|---|---|
 | rank-scan / 扫榜与选题 / 确定题材 / 开新书 | 扫榜与开书 | `references/开书流程.md` | `prompts/扫榜与开书构思提示词.md` |
-| 装书 / 导入长篇范文 / 范文入库 | 范文入库 | `references/范文拆书与仿写流程.md`、`references/项目结构与迁移.md` | 有合法正文时读 `prompts/拆书与仿写提示词.md` |
-| 拆书 / 深度拆解范文 / 分析爆款结构 | 范文拆书 | `references/范文拆书与仿写流程.md` | `prompts/拆书与仿写提示词.md` |
-| 文风蒸馏 / 生成文风基因 / 更新范文文风档案 | 文风蒸馏 | `references/文风蒸馏与执行流程.md`、`references/项目结构与迁移.md` | `prompts/文风蒸馏提示词.md` |
-| 仿写 / 对标范文开原创长篇 | 原创仿写 | `references/范文拆书与仿写流程.md`、`references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/拆书与仿写提示词.md`、`prompts/大纲生成提示词.md` |
-| 确定或融合项目文风 / 修改后续文风 | 项目文风确定 | `references/文风蒸馏与执行流程.md`、`references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/项目文风编译提示词.md` |
-| 文风校准 / 连续章节文风偏移 | 文风校准 | `references/文风蒸馏与执行流程.md`、`references/上下文组装.md` | 无 |
+| 装书 / 导入长篇范文 / 范文入库 | 范文入库 | `references/范文与创作依据.md`、`references/项目结构与迁移.md` | 有合法正文时读 `prompts/范文结构与文风分析提示词.md` |
+| 拆书 / 深度拆解范文 / 分析爆款结构 | 范文拆书 | `references/范文与创作依据.md` | `prompts/范文结构与文风分析提示词.md` |
+| 文风蒸馏 / 生成文风基因 / 更新范文文风档案 | 文风蒸馏 | `references/范文与创作依据.md`、`references/项目结构与迁移.md` | `prompts/范文结构与文风分析提示词.md` |
+| 仿写 / 对标范文开原创长篇 | 原创仿写 | `references/范文与创作依据.md`、`references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/范文结构与文风分析提示词.md`、`prompts/大纲生成提示词.md` |
+| 确定或融合项目文风 / 修改后续文风 | 项目文风确定 | `references/范文与创作依据.md`、`references/项目定位.md`、`references/项目结构与迁移.md` | `prompts/项目文风规范提示词.md` |
+| 文风校准 / 连续章节文风偏移 | 文风校准 | `references/范文与创作依据.md`、`references/上下文组装.md` | 无 |
 | 新小说 / 新建小说 / 粘贴新总大纲 | 新小说初始化 | `references/项目定位.md`、`references/项目结构与迁移.md` | 无 |
 | 大纲 / 总大纲 / 规划剧情 | 大纲生成 | `references/项目定位.md` | `prompts/大纲生成提示词.md` |
 | 设计系统或金手指 / 重构金手指 | 金手指设计/重构 | `references/项目定位.md`、`references/金手指设计与运营.md` | `prompts/金手指设计提示词.md` |
