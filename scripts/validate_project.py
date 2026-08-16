@@ -97,7 +97,7 @@ def check_html_anchors(project_root: Path):
     seen = set()
     anchor_re = re.compile(r"<!--\s*MYNOVEL:([A-Z-]+):([a-z0-9-]+):(START|END)\s*-->")
     for path in sorted(project_root.rglob("*.md")):
-        if "legacy" in path.parts:
+        if "legacy" in path.parts or "修复记录" in path.parts:
             continue
         counts = {}
         for kind, node, edge in anchor_re.findall(path.read_text(encoding="utf-8")):
@@ -357,7 +357,7 @@ def check_epub_exports(project_root: Path, core: dict):
 def check_duplicate_authority_blocks(project_root: Path):
     errors = []
     for path in sorted(project_root.rglob("*.md")):
-        if "legacy" in path.parts:
+        if "legacy" in path.parts or "修复记录" in path.parts:
             continue
         text = path.read_text(encoding="utf-8")
         for marker in ["# 文风规范", "# 系统设定", "# 角色档案", "# 世界观"]:

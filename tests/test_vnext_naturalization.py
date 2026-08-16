@@ -54,6 +54,7 @@ def write_state_evidence(attempt: Path):
     delta_path.parent.mkdir(parents=True, exist_ok=True)
     delta_path.write_text(json.dumps(deltas, ensure_ascii=False), encoding="utf-8")
     review = attempt / "reviews" / "state.md"
+    review.parent.mkdir(parents=True, exist_ok=True)
     review.write_text(
         "---\nnode_id: chapter-0001\nattempt_id: attempt-0001\n"
         f"reviewed_sha256: {vcc.sha256_file(candidate)}\n"
@@ -65,6 +66,44 @@ def write_state_evidence(attempt: Path):
 
 
 class TestValidateChapterCandidate(unittest.TestCase):
+    def test_not_requested_requires_byte_identical_candidate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "attempt"
+            shutil.copytree(ATTEMPT_OK, root)
+            record = root / "naturalization.md"
+            record.write_text(
+                record.read_text(encoding="utf-8").replace(
+                    "naturalization_result: candidate",
+                    "naturalization_result: not_requested",
+                ),
+                encoding="utf-8",
+            )
+            (root / "candidate.md").write_bytes((root / "workspace" / "source.md").read_bytes())
+            record.write_text(
+                record.read_text(encoding="utf-8").replace(
+                    next(line.split(": ", 1)[1] for line in record.read_text(encoding="utf-8").splitlines()
+                         if line.startswith("candidate_sha256:")),
+                    vcc.sha256_file(root / "candidate.md"),
+                ),
+                encoding="utf-8",
+            )
+            report = vcc.check_attempt(root)
+            self.assertTrue(report["ok"], report)
+
+            (root / "candidate.md").write_text("已被改写", encoding="utf-8")
+            changed_hash = vcc.sha256_file(root / "candidate.md")
+            lines = record.read_text(encoding="utf-8").splitlines()
+            record.write_text(
+                "\n".join(
+                    f"candidate_sha256: {changed_hash}" if line.startswith("candidate_sha256:") else line
+                    for line in lines
+                ) + "\n",
+                encoding="utf-8",
+            )
+            report = vcc.check_attempt(root)
+            self.assertFalse(report["checks"]["metadata"]["ok"])
+            self.assertTrue(any("not_requested" in error for error in report["checks"]["metadata"]["errors"]))
+
     def test_ok_attempt_passes(self):
         report = vcc.check_attempt(ATTEMPT_OK)
         self.assertTrue(report["ok"], report)
@@ -169,7 +208,28 @@ class TestValidateChapterCandidate(unittest.TestCase):
             report = vcc.check_attempt(root, require_reviews=True)
             self.assertFalse(report["checks"]["reviews"]["ok"])
 
-    def test_review_dimension_failure_and_state_evidence_failure_block(self):
+    def test_state_validation_is_independent_from_formal_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "attempt"
+            shutil.copytree(ATTEMPT_OK, root)
+            state_path = root / "state.json"
+            state_path.write_text(
+                json.dumps({"status": "summary_staged", "node_id": "chapter-0001",
+                            "attempt_id": "attempt-0001"}), encoding="utf-8")
+            write_state_evidence(root)
+            report = vcc.check_attempt(root, require_state_validation=True)
+            self.assertTrue(report["ok"], report)
+            self.assertNotIn("reviews", report["checks"])
+
+            cli = subprocess.run(
+                [sys.executable, str(SCRIPTS / "validate_chapter_candidate.py"),
+                 "--attempt-dir", str(root), "--require-state-validation"],
+                cwd=str(ROOT), text=True, encoding="utf-8",
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            self.assertEqual(cli.returncode, 0, cli.stdout + cli.stderr)
+
+    def test_review_dimension_and_state_evidence_failures_block_their_own_gates(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "attempt"
             shutil.copytree(ATTEMPT_OK, root)
@@ -179,12 +239,10 @@ class TestValidateChapterCandidate(unittest.TestCase):
                             "attempt_id": "attempt-0001"}), encoding="utf-8")
             write_reviews(root)
             write_state_evidence(root)
-            report = vcc.check_attempt(root, require_state_validation=True)
-            self.assertTrue(report["ok"], report)
             context = root / "reviews" / "context.md"
             context.write_text(context.read_text(encoding="utf-8").replace(
                 "| causality | pass |", "| causality | fail |"), encoding="utf-8")
-            report = vcc.check_attempt(root, require_state_validation=True)
+            report = vcc.check_attempt(root, require_reviews=True)
             self.assertFalse(report["checks"]["reviews"]["ok"])
             write_reviews(root)
             deltas = json.loads((root / "deltas" / "state.json").read_text(encoding="utf-8"))

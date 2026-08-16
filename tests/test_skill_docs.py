@@ -375,7 +375,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
         for phrase in ["扫榜与开书", "开书流程.md", "扫榜与开书构思提示词.md"]:
             self.assertIn(phrase, skill)
-        for phrase in ["未审查 attempt", "状态回证", "state_validation_report_sha256"]:
+        for phrase in ["未提交 attempt", "状态回证", "state_validation_report_sha256"]:
             self.assertIn(phrase, summary)
         for phrase in ["自然化前后差异审查", "候选正文对项目上下文审查", "validate_chapter_candidate.py"]:
             self.assertIn(phrase, review)
@@ -402,8 +402,8 @@ class TestWorkflowContractDocs(unittest.TestCase):
             (skill, ["细纲整理", "references/细纲整理流程.md"]),
             (prompt, ["不使用“草稿”", "不得擅自新增主要事件", "事件展开"]),
             (process, ["不改写用户已经确定的核心事件", "MYNOVEL:PLAN-NODE"]),
-            (sequence, ["稳定 node ID", "最近 3 个有效节点正文", "最近 1 个 main 节点"]),
-            (context, ["未审查 attempt", "不是有效节点", "current commit head"]),
+            (sequence, ["稳定 node ID", "最近 3 个有效节点正文", "最近 1 个 committed main 节点"]),
+            (context, ["未提交 attempt", "不是有效节点", "current head"]),
         ]:
             for phrase in phrases:
                 self.assertIn(phrase, doc)
@@ -423,7 +423,10 @@ class TestWorkflowContractDocs(unittest.TestCase):
 
         self.assertIn("py -3", contract)
         self.assertIn("Windows", contract)
-        self.assertIn("python 不可用", contract)
+        self.assertIn("Python 3.13", contract)
+        self.assertIn("不要先调用 `python`", contract)
+        self.assertIn("直接使用 `py -3", skill)
+        self.assertIn("不得因 `python` 命令不可用而判定缺少 Python 环境", skill)
 
     def test_epub_sync_contract_in_skill_docs(self):
         project = read_doc("references/EPUB导出与同步.md")
@@ -547,6 +550,21 @@ class TestStyleDistillationContracts(unittest.TestCase):
 
 
 class TestNaturalizationContracts(unittest.TestCase):
+
+    def test_body_filename_is_the_visible_review_status(self):
+        skill = read_doc("SKILL.md")
+        workflow = read_doc("references/正文生产与审修.md")
+        summary = read_doc("references/状态与总结.md")
+        generation = read_doc("prompts/正文生成提示词.md")
+        review = read_doc("prompts/正文审查与修复提示词.md")
+
+        for phrase in ["review_pending", "必须保留 `（草稿）.md`", "只有两份正式审查通过"]:
+            self.assertIn(phrase, skill)
+        for phrase in ["审查未通过不得改名", "原子物化", "恢复带 `（草稿）`"]:
+            self.assertIn(phrase, workflow)
+        self.assertIn("总结和状态提交完成不代表正式审查完成", summary)
+        self.assertIn("正文生成阶段绝不负责移除该标签", generation)
+        self.assertIn("登记失败或 CAS 失败时保持草稿文件名", review)
     def test_naturalization_rules_exist_only_in_single_prompt(self):
         skill = read_doc("SKILL.md")
         naturalization = read_doc("prompts/正文自然化提示词.md")
@@ -557,16 +575,40 @@ class TestNaturalizationContracts(unittest.TestCase):
                        "不引用范文原句", "不以删字代替改写"]:
             self.assertIn(phrase, naturalization)
 
-    def test_naturalization_stage_precedes_formal_review(self):
+    def test_naturalization_is_manual_and_has_a_formal_route(self):
         skill = read_doc("SKILL.md")
-        chain = next(line for line in skill.splitlines() if line.startswith("新书完整生产链为："))
-        self.assertLess(chain.index("正文自然化"), chain.index("草稿审查"))
+        naturalization = read_doc("prompts/正文自然化提示词.md")
+        workflow = read_doc("references/正文生产与审修.md")
+        route = next(line for line in skill.splitlines() if "去AI" in line and line.startswith("|"))
+        self.assertIn("手动正文自然化", route)
+        self.assertIn("prompts/正文自然化提示词.md", route)
+        self.assertIn("不是正文生成的自动阶段", naturalization)
+        self.assertIn("只在用户明确", workflow)
 
-    def test_write_only_stops_before_summary_and_commit(self):
+    def test_ordinary_write_commits_state_without_waiting_for_review(self):
         skill = read_doc("SKILL.md")
-        sentence = next(line for line in skill.splitlines() if line.startswith("- 用户只要求“写第X章”"))
-        for phrase in ["候选态", "不生成正式总结", "不更新状态仓库", "不推进 commit head"]:
-            self.assertIn(phrase, sentence)
+        workflow = read_doc("references/正文生产与审修.md")
+        context = read_doc("references/长篇上下文与一致性.md")
+        summary = read_doc("references/状态与总结.md")
+        generation = read_doc("prompts/正文生成提示词.md")
+
+        for phrase in ["逐章状态提交", "不得自动读取或调用", "review_pending", "不阻断续写"]:
+            self.assertIn(phrase, skill)
+        for phrase in ["默认创作与审查编排", "不自动执行自然化", "生成章节总结", "不自动转入审查"]:
+            self.assertIn(phrase, workflow)
+        for phrase in ["待审节点", "review_pending", "不因待审状态停止", "有效创作事实"]:
+            self.assertIn(phrase, context)
+        self.assertIn("写完即有正式章节总结和最新主角/系统状态仓库", summary)
+        for phrase in ["不执行自然化", "生成稿原样作为候选", "只有用户之后明确要求"]:
+            self.assertIn(phrase, generation)
+
+    def test_post_review_fact_change_rebuilds_affected_state(self):
+        workflow = read_doc("references/正文生产与审修.md")
+        context = read_doc("references/长篇上下文与一致性.md")
+        for phrase in ["纯表达修改", "重新生成目标章 summary/state delta", "从第一处影响点 rebase"]:
+            self.assertIn(phrase, workflow)
+        for phrase in ["事实性修复", "第一处受影响节点", "未受影响节点"]:
+            self.assertIn(phrase, context)
 
     def test_root_does_not_advertise_ai_polish_as_independent_stage(self):
         root = (ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -574,10 +616,14 @@ class TestNaturalizationContracts(unittest.TestCase):
         self.assertNotIn("short-form", root)
         self.assertNotIn("短篇", root)
 
-    def test_naturalization_prompt_does_not_output_scores_or_teaching(self):
+    def test_naturalization_prompt_keeps_scores_out_of_body_output(self):
         naturalization = read_doc("prompts/正文自然化提示词.md")
-        self.assertNotIn("/50", naturalization)
+        # 质量评分表允许作为交付前内部自检存在
+        self.assertIn("质量评分", naturalization)
+        self.assertIn("/50", naturalization)
+        # 但输出契约仍要求评分、命中清单、修改总结不进入正文输出
         self.assertIn("只包含修改后的完整章节", naturalization)
+        self.assertIn("质量评分表用于交付前的内部自检，不输出到正文", naturalization)
 
     def test_humanizer_rules_are_self_contained_and_novel_adapted(self):
         naturalization = read_doc("prompts/正文自然化提示词.md")

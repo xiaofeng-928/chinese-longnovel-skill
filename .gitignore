@@ -3,3 +3,4 @@ __pycache__/
 *.pyo
 .env
 .worktrees/
+/去ai网页版.txt

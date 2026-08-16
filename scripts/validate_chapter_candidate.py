@@ -20,7 +20,9 @@ REVIEW_DIMENSIONS = [
     "system_boundary", "chapter_hook",
 ]
 REVIEW_KINDS = {"naturalization", "context"}
-NATURALIZATION_RESULTS = {"candidate", "repaired", "reverted", "skipped", "accepted"}
+NATURALIZATION_RESULTS = {
+    "candidate", "repaired", "reverted", "skipped", "accepted", "not_requested",
+}
 PRE_REVIEW_STATES = {"draft_generated", "naturalization_candidate", "review_pending"}
 POST_REVIEW_STATES = {"review_pending", "review_passed", "summary_staged", "commit_prepared"}
 STATE_VALIDATION_STATES = {"summary_staged", "commit_prepared"}
@@ -244,7 +246,6 @@ def check_attempt(attempt_dir: Path, *, project_root: Path | None = None,
                   require_reviews: bool = False,
                   require_state_validation: bool = False):
     attempt_dir = Path(attempt_dir)
-    require_reviews = require_reviews or require_state_validation
     project_root = Path(project_root) if project_root else infer_project_root(attempt_dir)
     report = {"ok": True, "attempt_dir": str(attempt_dir), "checks": {}}
     workspace = attempt_dir / "workspace"
@@ -299,8 +300,10 @@ def check_attempt(attempt_dir: Path, *, project_root: Path | None = None,
         metadata_errors.append("invalid naturalization_result")
     if front.get("processed_at"):
         metadata_errors.extend(validate_iso_timestamp(front["processed_at"], "processed_at"))
-    if front.get("naturalization_result") == "skipped" and source_hash != candidate_hash:
-        metadata_errors.append("skipped naturalization must use the source bytes as candidate")
+    if front.get("naturalization_result") in {"skipped", "not_requested"} and source_hash != candidate_hash:
+        metadata_errors.append(
+            f"{front['naturalization_result']} must use the source bytes as candidate"
+        )
     if state.get("node_id") != node_id or state.get("attempt_id") != attempt_id:
         metadata_errors.append("state node_id/attempt_id mismatch")
     report["checks"]["metadata"] = {"ok": not metadata_errors, "errors": metadata_errors}
@@ -403,7 +406,7 @@ def main():
     report = check_attempt(
         args.attempt_dir,
         project_root=args.project_root,
-        require_reviews=args.require_reviews or args.require_state_validation,
+        require_reviews=args.require_reviews,
         require_state_validation=args.require_state_validation,
     )
     if args.json:

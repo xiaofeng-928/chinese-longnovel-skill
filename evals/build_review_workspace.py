@@ -24,6 +24,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--skill-root", required=True, type=Path)
     parser.add_argument("--workspace", required=True, type=Path)
+    parser.add_argument("--baseline-label", default="v2.0")
     args = parser.parse_args()
     evals = json.loads((args.skill_root / "evals" / "evals.json").read_text(encoding="utf-8"))["evals"]
     runs = []
@@ -63,6 +64,7 @@ def main() -> int:
         "metadata": {
             "skill_name": "my-novel", "skill_path": str(args.skill_root),
             "executor_model": "gpt-5.6-sol", "analyzer_model": "deterministic-token-grader",
+            "baseline_label": args.baseline_label,
             "timestamp": "2026-08-11T00:00:00+08:00",
             "evals_run": [item["id"] for item in evals], "runs_per_configuration": 1,
         },
@@ -83,9 +85,9 @@ def main() -> int:
         json.dumps(benchmark, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (args.workspace / "benchmark.md").write_text(
-        "# MyNovel vNext vs v2.0\n\n"
+        f"# MyNovel vNext vs {args.baseline_label}\n\n"
         f"- vNext assertion pass rate: {current['mean']:.1%}\n"
-        f"- v2.0 assertion pass rate: {baseline['mean']:.1%}\n"
+        f"- {args.baseline_label} assertion pass rate: {baseline['mean']:.1%}\n"
         f"- delta: {current['mean'] - baseline['mean']:+.1%}\n\n"
         "Per-run timing and token counts were unavailable from Codex CLI output-last-message.\n",
         encoding="utf-8",

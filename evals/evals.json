@@ -3,40 +3,40 @@
   "evals": [
     {
       "id": 1,
-      "name": "naturalization-required-before-review",
-      "prompt": "我给你一章经营系统爽文草稿，事件和数值都对，但满篇是空泛总结、机械三段式和口号式金句。请说明按本 Skill 的完整审修流程会如何处理、保存哪些证据、何时允许提交。不要实际写小说，只输出执行方案。",
-      "expected_output": "自然化在正式审查前；候选绑定源/候选哈希和非空事实锁；两个独立审查与状态回证通过后才事务提交。",
+      "name": "manual-naturalization-after-explicit-request",
+      "prompt": "我给你一章已经提交的经营系统爽文草稿，事件和数值都对，但满篇是空泛总结、机械三段式和口号式金句。我现在明确要求‘去AI并自然化这一章’。请说明会如何处理、保存哪些证据；不要实际改文件。",
+      "expected_output": "只有收到明确指令才执行自然化；以已提交正文为源创建新 attempt，绑定源/候选哈希和事实锁。候选验证通过后作为表达修订提交，旧审查失效；不得改剧情或状态。",
       "files": [],
       "expectations": [
-        "明确写出正文自然化先于正式审查",
+        "明确自然化仅由用户手动指令触发，不属于自动创作链",
         "提到源稿哈希、候选哈希与非空 fact-lock（字段名或等价中文均可）",
-        "提到 naturalization/context 两份独立审查",
-        "提到状态回证和 commit head CAS 前不得物化总结"
+        "已提交正文自然化创建新 attempt 并使旧审查失效",
+        "明确自然化不得改变剧情事实和状态仓库语义"
       ]
     },
     {
       "id": 2,
       "name": "naturalization-skip-without-overediting",
-      "prompt": "这章表达已经自然，事件、数值和角色声音都稳定。我明确要求不要为了润色而改字，但仍要接入后续审查。请说明 Skill 应如何处理；不要实际写小说。",
-      "expected_output": "允许 skipped，自然化候选与源稿字节完全一致，但仍保留 attempt、事实锁并进入双审查。",
+      "prompt": "这章表达已经自然。我现在手动要求自然化，但不要为了润色而强行改字，之后仍要接入后续审查。请说明 Skill 应如何处理；不要实际写小说。",
+      "expected_output": "允许 skipped，自然化候选与源稿字节完全一致，仍保留 attempt 和事实锁；状态回证后提交为 review_pending，正式审查稍后独立执行。",
       "files": [],
       "expectations": [
         "允许 naturalization_result 为 skipped",
         "要求 skipped 候选与源稿字节一致",
-        "不会因为无需改写而跳过事实锁或正式审查",
+        "不会因为无需改写而跳过事实锁、状态提交或后置正式审查",
         "不会产生无意义的过度编辑"
       ]
     },
     {
       "id": 3,
       "name": "naturalization-damage-is-blocked",
-      "prompt": "自然化前正文写‘生存点余额：1000’，候选误写成‘生存点余额：10000’，并把主角‘没有下车’改成‘下了车’。审查者说读起来更顺，建议直接通过。请按 Skill 判断并给出下一步；不要改文件。",
-      "expected_output": "数值与否定极性变化必须阻断；旧审查无效，新 attempt repair/revert 后重新双审查，不能写总结或提交。",
+      "prompt": "我手动要求自然化。源正文写‘生存点余额：1000’，候选误写成‘生存点余额：10000’，并把主角‘没有下车’改成‘下了车’。审查者说读起来更顺，建议直接通过。请按 Skill 判断并给出下一步；不要改文件。",
+      "expected_output": "数值与否定极性变化必须在候选验证阶段阻断；修复或回退产生新 attempt，验证通过前不能写总结、更新仓库或提交。",
       "files": [],
       "expectations": [
         "识别 numbers 与 polarity 失败",
         "拒绝以表达更顺为理由通过",
-        "repair 或 revert 必须产生新 attempt 并重新双审查",
+        "repair 或 revert 必须产生新 attempt 并重新验证",
         "阻止总结、状态仓库和 commit head 更新"
       ]
     },
@@ -51,6 +51,45 @@
         "先把题材规律与用户经营优势组装成开书方案",
         "不询问短篇中篇长篇",
         "新项目默认规划 1000 章以上"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "continuation-does-not-review-pending-chapters",
+      "prompt": "项目里第1-3章已经逐章提交，章节总结、主角仓库和系统仓库都已更新，但审查状态还是 review_pending。我现在说‘继续写第4-6章’。请说明 MyNovel 应直接怎么执行；不要实际写小说或改文件。",
+      "expected_output": "直接从第3章 current head 的正文、总结和状态仓库续写第4-6章；每章生成后不自然化，原样验证、总结和状态回证后立即提交为 review_pending。不得先审第1-3章，也不在第4-6章写完后自动审查。",
+      "files": [],
+      "expectations": [
+        "明确第1-3章待审状态不阻断续写",
+        "明确不先审查第1-3章",
+        "第4-6章逐章生成但不自动自然化，直接验证、总结、更新状态并提交为 review_pending",
+        "明确写完第4-6章后不自动进入审查"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "review-repair-refreshes-state-only-when-facts-change",
+      "prompt": "我要求对已提交的第11-15章审查并修复。第12章只改了句式，第14章则改了关键交易结果和系统余额。请说明审后总结与状态仓库怎么处理；不要实际改文件。",
+      "expected_output": "审查按连续5章执行。第12章只更新正文哈希及关联元数据，不重写语义总结和仓库；第14章重新生成 summary/state delta，并从影响点重建主角/系统仓库及受影响后续投影。",
+      "files": [],
+      "expectations": [
+        "第11-15章作为连续5章审查子批",
+        "纯表达修复不重算语义总结和状态仓库",
+        "交易结果和系统余额变化会重算章节总结与状态增量",
+        "从第14章影响点重建受影响的主角/系统仓库和后续投影"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "ordinary-writing-skips-naturalization",
+      "prompt": "请创作这本小说第1-3章。我没有要求自然化、去AI或润稿。请只说明 MyNovel 对每章的执行顺序，不要实际写小说或改文件。",
+      "expected_output": "每章生成后不调用自然化提示词，源稿与候选字节一致并记录 naturalization_result: not_requested；候选验证后立即生成章节总结、更新主角/系统仓库、状态回证并提交为 review_pending，再写下一章。",
+      "files": [],
+      "expectations": [
+        "明确普通创作不自动调用自然化或去AI",
+        "记录 naturalization_result: not_requested 且源稿/候选字节一致",
+        "每章仍会生成章节总结并更新主角/系统状态仓库",
+        "状态回证后逐章提交为 review_pending 再继续下一章"
       ]
     }
   ]

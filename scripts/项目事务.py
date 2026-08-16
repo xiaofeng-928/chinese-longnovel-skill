@@ -419,10 +419,24 @@ def tx_manifest_path(project_root: Path, transaction_id: str) -> Path:
     return project_root / TRANSACTIONS_DIR / transaction_id / "manifest.json"
 
 
+def validate_body_asset_names(assets: dict, review_status: str) -> None:
+    """Keep the user-visible draft suffix aligned with the formal review state."""
+    for relative in assets:
+        normalized = str(relative).replace("\\", "/")
+        if not normalized.startswith("正文/") or not normalized.endswith(".md"):
+            continue
+        is_draft = normalized.endswith("（草稿）.md")
+        if review_status == "review_pending" and not is_draft:
+            raise ValueError("review_pending body asset must keep the （草稿） suffix")
+        if review_status == "review_passed" and is_draft:
+            raise ValueError("review_passed body asset must not keep the （草稿） suffix")
+
+
 def prepare_transaction(project_root: Path, *, project_id: str, parent_transaction_id: str,
                         generation_id: str, base_head_sha256: str, node_id: str,
                         attempt_id: str, assets: dict, sequence_event: dict | None = None,
                         review_evidence: dict | None = None,
+                        review_status: str | None = None,
                         transaction_id: str | None = None) -> dict:
     """创建不可变事务清单。assets 为 {relative_path: sha256}，增量块哈希由调用方提供。"""
     if transaction_id is None:
@@ -431,13 +445,28 @@ def prepare_transaction(project_root: Path, *, project_id: str, parent_transacti
         transaction_id = f"tx-{node_id}-{stamp}-{uuid_module.uuid4().hex[:8]}"
     if not isinstance(assets, dict):
         raise ValueError("assets must be a mapping of project-relative path to sha256")
-    required_review_evidence = {
+    all_review_evidence = {
         "naturalization_review_sha256", "context_review_sha256",
         "state_validation_report_sha256",
     }
+    if review_status is None:
+        review_status = (
+            "review_passed" if isinstance(review_evidence, dict)
+            and all_review_evidence.issubset(review_evidence)
+            else "review_pending"
+        )
+    if review_status not in {"review_pending", "review_passed"}:
+        raise ValueError("review_status must be review_pending or review_passed")
+    validate_body_asset_names(assets, review_status)
+    required_review_evidence = {"state_validation_report_sha256"}
+    if review_status == "review_passed":
+        required_review_evidence = all_review_evidence
     if not isinstance(review_evidence, dict) or not required_review_evidence.issubset(review_evidence):
-        raise ValueError("review_evidence must contain both review hashes and state validation hash")
-    for key in required_review_evidence:
+        raise ValueError("review_evidence is incomplete for review_status")
+    formal_keys = {"naturalization_review_sha256", "context_review_sha256"}
+    if len(formal_keys.intersection(review_evidence)) == 1:
+        raise ValueError("formal review evidence must contain both review hashes")
+    for key in all_review_evidence.intersection(review_evidence):
         if not re.fullmatch(r"[0-9a-f]{64}", str(review_evidence[key])):
             raise ValueError(f"invalid review evidence hash: {key}")
     transaction_dir = tx_manifest_path(project_root, transaction_id).parent
@@ -467,6 +496,8 @@ def prepare_transaction(project_root: Path, *, project_id: str, parent_transacti
             "state_validation_report_sha256": "reviews/state.md",
         }
         for evidence_key, suffix in evidence_paths.items():
+            if evidence_key not in review_evidence:
+                continue
             matches = [
                 item for relative, item in immutable_assets.items()
                 if relative.endswith(suffix)
@@ -484,6 +515,7 @@ def prepare_transaction(project_root: Path, *, project_id: str, parent_transacti
         "attempt_id": attempt_id,
         "assets": immutable_assets,
         "sequence_event": sequence_event,
+        "review_status": review_status,
         "review_evidence": review_evidence,
         "created_at": now_iso(),
         }
@@ -563,14 +595,32 @@ def verify_chain(project_root: Path, project_id: str, base_head_sha256: str | No
         if not manifest.get("generation_id"):
             errors.append(f"transaction generation missing: {transaction_id}")
         review_evidence = manifest.get("review_evidence")
-        required_evidence = {
+        all_evidence = {
             "naturalization_review_sha256", "context_review_sha256",
             "state_validation_report_sha256",
         }
+        review_status = manifest.get("review_status")
+        if review_status is None and isinstance(review_evidence, dict) and all_evidence.issubset(review_evidence):
+            review_status = "review_passed"
+        if review_status not in {"review_pending", "review_passed"}:
+            errors.append(f"transaction review status invalid: {transaction_id}")
+        else:
+            try:
+                validate_body_asset_names(manifest.get("assets") or {}, review_status)
+            except ValueError as exc:
+                errors.append(f"transaction body filename/status mismatch: {transaction_id}: {exc}")
+        required_evidence = {"state_validation_report_sha256"}
+        if review_status == "review_passed":
+            required_evidence = all_evidence
         if not isinstance(review_evidence, dict) or not required_evidence.issubset(review_evidence):
             errors.append(f"transaction review evidence missing: {transaction_id}")
-        elif any(not re.fullmatch(r"[0-9a-f]{64}", str(review_evidence[key])) for key in required_evidence):
+        elif any(not re.fullmatch(r"[0-9a-f]{64}", str(review_evidence[key]))
+                 for key in all_evidence.intersection(review_evidence)):
             errors.append(f"transaction review evidence invalid: {transaction_id}")
+        if isinstance(review_evidence, dict):
+            formal_keys = {"naturalization_review_sha256", "context_review_sha256"}
+            if len(formal_keys.intersection(review_evidence)) == 1:
+                errors.append(f"transaction formal review evidence incomplete: {transaction_id}")
         next_parent = chain[index + 1].get("transaction_id")
         if manifest.get("parent_transaction_id") != next_parent:
             errors.append(f"transaction parent mismatch: {transaction_id}")
@@ -600,6 +650,8 @@ def verify_chain(project_root: Path, project_id: str, base_head_sha256: str | No
                 "state_validation_report_sha256": "reviews/state.md",
             }
             for evidence_key, suffix in expected_suffixes.items():
+                if evidence_key not in review_evidence:
+                    continue
                 matches = [item for relative, item in assets.items() if relative.endswith(suffix)]
                 if (len(matches) != 1 or not isinstance(matches[0], dict)
                         or matches[0].get("sha256") != review_evidence.get(evidence_key)):

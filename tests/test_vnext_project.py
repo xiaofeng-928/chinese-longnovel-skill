@@ -26,17 +26,20 @@ def create_asset(root: Path, relative: str = "正文/x.md", text: str = "正文"
 
 
 def prepare(root: Path, *, transaction_id=None, parent="tx-genesis", project_id=PROJECT_ID,
-            node_id="chapter-0001", attempt_id="attempt-0001", asset=True):
+            node_id="chapter-0001", attempt_id="attempt-0001", asset=True,
+            review_status="review_passed"):
     assets = {}
     if asset:
         relative, digest = create_asset(root, f"workspace/{node_id}.md", node_id)
         assets[relative] = digest
     review_evidence = {}
-    for key, name in [
-        ("naturalization_review_sha256", "naturalization.md"),
-        ("context_review_sha256", "context.md"),
-        ("state_validation_report_sha256", "state.md"),
-    ]:
+    evidence_files = [("state_validation_report_sha256", "state.md")]
+    if review_status == "review_passed":
+        evidence_files[:0] = [
+            ("naturalization_review_sha256", "naturalization.md"),
+            ("context_review_sha256", "context.md"),
+        ]
+    for key, name in evidence_files:
         relative, digest = create_asset(
             root, f"attempts/{node_id}/reviews/{name}", f"{node_id}:{name}"
         )
@@ -46,7 +49,8 @@ def prepare(root: Path, *, transaction_id=None, parent="tx-genesis", project_id=
         root, project_id=project_id, parent_transaction_id=parent,
         generation_id="gen-0001", base_head_sha256=tx.head_hash(root),
         node_id=node_id, attempt_id=attempt_id, assets=assets,
-        review_evidence=review_evidence, transaction_id=transaction_id,
+        review_evidence=review_evidence, review_status=review_status,
+        transaction_id=transaction_id,
     )
 
 
@@ -191,6 +195,74 @@ class TestGenesisAndChain(unittest.TestCase):
         self.assertIn("manifest_sha256", manifest)
         evidence = next(iter(manifest["assets"].values()))
         self.assertTrue((path.parent / evidence["snapshot_path"]).is_file())
+
+    def test_pending_review_transaction_only_requires_state_evidence(self):
+        root = self.make_project()
+        tx.create_genesis(root, PROJECT_ID)
+        manifest = prepare(root, review_status="review_pending")
+        self.assertEqual(manifest["review_status"], "review_pending")
+        self.assertEqual(set(manifest["review_evidence"]), {"state_validation_report_sha256"})
+        head = tx.read_head(root)
+        head.update({
+            "head_transaction_id": manifest["transaction_id"],
+            "parent_transaction_id": "tx-genesis",
+        })
+        tx.commit_head_cas(root, head, tx.head_hash(root))
+        ok, errors = tx.verify_chain(root, PROJECT_ID)
+        self.assertTrue(ok, errors)
+
+    def test_body_filename_must_match_review_status(self):
+        root = self.make_project()
+        tx.create_genesis(root, PROJECT_ID)
+        relative, digest = create_asset(root, "正文/第001章_测试.md", "正文")
+        state_path, state_hash = create_asset(
+            root, "attempts/chapter-0001/reviews/state.md", "state pass"
+        )
+        with self.assertRaisesRegex(ValueError, "must keep the （草稿） suffix"):
+            tx.prepare_transaction(
+                root,
+                project_id=PROJECT_ID,
+                parent_transaction_id="tx-genesis",
+                generation_id="gen-0001",
+                base_head_sha256=tx.head_hash(root),
+                node_id="chapter-0001",
+                attempt_id="attempt-0001",
+                assets={relative: digest, state_path: state_hash},
+                review_status="review_pending",
+                review_evidence={"state_validation_report_sha256": state_hash},
+            )
+
+        draft_relative, draft_digest = create_asset(
+            root, "正文/第001章_测试（草稿）.md", "正文"
+        )
+        natural_path, natural_hash = create_asset(
+            root, "attempts/chapter-0001/reviews/naturalization.md", "natural pass"
+        )
+        context_path, context_hash = create_asset(
+            root, "attempts/chapter-0001/reviews/context.md", "context pass"
+        )
+        with self.assertRaisesRegex(ValueError, "must not keep the （草稿） suffix"):
+            tx.prepare_transaction(
+                root,
+                project_id=PROJECT_ID,
+                parent_transaction_id="tx-genesis",
+                generation_id="gen-0001",
+                base_head_sha256=tx.head_hash(root),
+                node_id="chapter-0001",
+                attempt_id="attempt-0002",
+                assets={
+                    draft_relative: draft_digest,
+                    state_path: state_hash,
+                    natural_path: natural_hash,
+                    context_path: context_hash,
+                },
+                review_status="review_passed",
+                review_evidence={
+                    "state_validation_report_sha256": state_hash,
+                    "naturalization_review_sha256": natural_hash,
+                    "context_review_sha256": context_hash,
+                },
+            )
 
     def test_duplicate_transaction_id_is_rejected_without_overwrite(self):
         root = self.make_project()
