@@ -139,7 +139,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
         workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
-            r"D:\ai小说\小说\范文",
+            "长篇范文库",
             "<平台>范文",
             "<大类题材>",
             "番茄范文",
@@ -421,12 +421,9 @@ class TestWorkflowContractDocs(unittest.TestCase):
         self.assertNotIn("第1-50章常规分阶段细纲", skill)
         contract = read_doc("references/自动化脚本契约.md")
 
-        self.assertIn("py -3", contract)
-        self.assertIn("Windows", contract)
-        self.assertIn("Python 3.13", contract)
-        self.assertIn("不要先调用 `python`", contract)
-        self.assertIn("直接使用 `py -3", skill)
-        self.assertIn("不得因 `python` 命令不可用而判定缺少 Python 环境", skill)
+        for phrase in ["py -3", "python3", "<Skill根目录>", "当前平台"]:
+            self.assertIn(phrase, contract + skill)
+        self.assertIn("不得因某一个命令名不可用", contract + skill)
 
     def test_epub_sync_contract_in_skill_docs(self):
         project = read_doc("references/EPUB导出与同步.md")

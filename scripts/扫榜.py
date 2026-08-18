@@ -16,6 +16,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 import sys
 import urllib.parse
 from collections import Counter
@@ -32,7 +33,8 @@ VALID_FIELDS = {
 }
 REQUIRED_FIELDS = {"source_platform", "list_name", "snapshot_date", "title", "url", "captured_at"}
 MARKET_DIMENSIONS = {"management_loop", "system_loop"}
-ARCHIVE_ROOT = Path(r"D:\ai小说\小说\范文\扫榜")
+WORKSPACE_ROOT = Path(os.environ.get("MYNOVEL_WORKSPACE", Path.cwd())).expanduser()
+ARCHIVE_ROOT = WORKSPACE_ROOT / "小说" / "范文" / "扫榜"
 
 EXIT_READY = 0
 EXIT_SCHEMA_INVALID = 2
