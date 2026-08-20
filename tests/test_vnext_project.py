@@ -9,6 +9,7 @@ import sys as _sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import 项目事务 as tx
+import validate_project as project_validator
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -492,6 +493,148 @@ class TestValidateProjectScript(unittest.TestCase):
                                 encoding="utf-8")
                 report = self.run_validator(root, expect_fail=True)
                 self.assertFalse(report["checks"][check]["ok"])
+
+    def make_window_contract_project(self, *, early_exit=False, empty_reserve=False):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        (root / "plan").mkdir(parents=True)
+        (root / "plan" / "系统发展_第1-50章.md").write_text("# 系统发展\n", encoding="utf-8")
+        reserve = "[]" if empty_reserve else "第51-100章完成阶段收束"
+        first_exit = "true" if early_exit else "false"
+        budget_rows = "\n".join(
+            f"| 第{start}-{start + 4}章 | 推进第{start}章经营矛盾 | "
+            f"结算本组资源投入 | 不完成阶段退出条件 | 保留后续对手压力 |"
+            for start in range(1, 51, 5)
+        )
+        outline = f"""# 总大纲
+
+<!-- MYNOVEL:STAGE:stage-0001:START -->
+- stage_id: stage-0001
+- chapter_start: 1
+- chapter_end: 100
+- stage_status: active
+- exit_condition: 第100章完成阶段退出
+<!-- MYNOVEL:STAGE:stage-0001:END -->
+
+## 规划窗口合同
+
+<!-- MYNOVEL:WINDOW:window-0001-0050:START -->
+- window_id: window-0001-0050
+- stage_id: stage-0001
+- chapter_start: 1
+- chapter_end: 50
+- window_status: prepared
+- stage_exit_allowed: {first_exit}
+- system_plan: plan/系统发展_第1-50章.md
+- must_complete: 建立初步经营闭环
+- advance_only: 推进阶段主矛盾但不完成
+- protagonist_progress_cap: 完成初步经营者身份但不成为区域领袖
+- system_progress_cap: 开放基础经营权限但不解锁阶段终极模块
+- forbidden_early_completion: 禁止完成阶段退出条件
+- reserved_for_later: {reserve}
+- end_unresolved: 核心对手仍在且资源债未结
+- next_stage_forbidden: 禁止进入下一地图
+- next_window_id: window-0051-0100
+- five_chapter_budget_status: locked
+
+## 五章剧情预算
+| 五章组 | 本组职责 | 允许结算 | 禁止越过 | 必须留给后组 |
+|---|---|---|---|---|
+{budget_rows}
+<!-- MYNOVEL:WINDOW:window-0001-0050:END -->
+
+<!-- MYNOVEL:WINDOW:window-0051-0100:START -->
+- window_id: window-0051-0100
+- stage_id: stage-0001
+- chapter_start: 51
+- chapter_end: 100
+- window_status: reserved
+- stage_exit_allowed: true
+- system_plan: null
+- must_complete: 完成阶段退出条件
+- advance_only: []
+- protagonist_progress_cap: 完成阶段身份跃迁
+- system_progress_cap: 完成本阶段系统结算
+- forbidden_early_completion: 禁止进入下一宏观阶段核心事件
+- reserved_for_later: []
+- end_unresolved: 保留下一阶段入口压力
+- next_stage_forbidden: 禁止提前解决下一阶段对手
+- next_window_id: null
+- five_chapter_budget_status: pending
+<!-- MYNOVEL:WINDOW:window-0051-0100:END -->
+"""
+        (root / "plan" / "总大纲.md").write_text(outline, encoding="utf-8")
+        core = {
+            "规划窗口协议版本": "1",
+            "当前计划窗口": "第1-50章",
+            "当前窗口合同": "window-0001-0050",
+            "当前剧情预算锁": "locked",
+            "下一计划窗口": "null",
+            "下一窗口合同": "null",
+            "下一剧情预算锁": "null",
+        }
+        authority = {
+            "总大纲": "plan/总大纲.md",
+            "当前系统计划": "plan/系统发展_第1-50章.md",
+            "下一系统计划": "null",
+        }
+        return root, core, authority
+
+    def test_window_contract_protocol_accepts_full_stage_budget(self):
+        root, core, authority = self.make_window_contract_project()
+        ok, errors = project_validator.check_window_contracts(root, core, authority)
+        self.assertTrue(ok, errors)
+
+    def test_window_contract_protocol_rejects_early_stage_exit(self):
+        root, core, authority = self.make_window_contract_project(early_exit=True)
+        ok, errors = project_validator.check_window_contracts(root, core, authority)
+        self.assertFalse(ok)
+        self.assertTrue(any("stage_exit_allowed" in error for error in errors), errors)
+
+    def test_window_contract_protocol_rejects_empty_future_reserve(self):
+        root, core, authority = self.make_window_contract_project(empty_reserve=True)
+        ok, errors = project_validator.check_window_contracts(root, core, authority)
+        self.assertFalse(ok)
+        self.assertTrue(any("reserved_for_later" in error for error in errors), errors)
+
+    def test_window_contract_protocol_rejects_incomplete_five_chapter_budget(self):
+        root, core, authority = self.make_window_contract_project()
+        outline = root / "plan" / "总大纲.md"
+        text = outline.read_text(encoding="utf-8")
+        outline.write_text(
+            text.replace(
+                "| 第46-50章 | 推进第46章经营矛盾 | 结算本组资源投入 | "
+                "不完成阶段退出条件 | 保留后续对手压力 |\n",
+                "",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        ok, errors = project_validator.check_window_contracts(root, core, authority)
+        self.assertFalse(ok)
+        self.assertTrue(any("budget coverage mismatch" in error for error in errors), errors)
+
+    def test_window_contract_protocol_rejects_empty_or_placeholder_budget_cells(self):
+        for replacement in ("", "...", "本组职责"):
+            with self.subTest(replacement=replacement):
+                root, core, authority = self.make_window_contract_project()
+                outline = root / "plan" / "总大纲.md"
+                text = outline.read_text(encoding="utf-8")
+                outline.write_text(
+                    text.replace("推进第1章经营矛盾", replacement, 1),
+                    encoding="utf-8",
+                )
+                ok, errors = project_validator.check_window_contracts(root, core, authority)
+                self.assertFalse(ok)
+                self.assertTrue(any("budget cell" in error for error in errors), errors)
+
+    def test_window_contract_protocol_rejects_manifest_system_plan_mismatch(self):
+        root, core, authority = self.make_window_contract_project()
+        authority["当前系统计划"] = "plan/系统发展_第51-100章.md"
+        ok, errors = project_validator.check_window_contracts(root, core, authority)
+        self.assertFalse(ok)
+        self.assertTrue(any("系统计划路径与窗口合同不一致" in error for error in errors), errors)
 
     def test_uncommitted_body_and_transaction_pollution_fail(self):
         with tempfile.TemporaryDirectory() as tmp:

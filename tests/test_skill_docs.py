@@ -110,6 +110,37 @@ class TestStageOutlineMemorySyncDocs(unittest.TestCase):
                        "plan_status", "task_refs", "node_type"]:
             self.assertIn(phrase, structure)
 
+    def test_outline_window_preparation_prevents_front_loading(self):
+        skill = read_doc("SKILL.md")
+        workflow = read_doc("references/规划窗口与防抢跑.md")
+        structure = read_doc("references/项目结构与迁移.md")
+        system_prompt = read_doc("prompts/系统阶段规划提示词.md")
+        prepare_prompt = read_doc("prompts/规划窗口准备提示词.md")
+        outline_prompt = read_doc("prompts/分阶段大纲细化提示词.md")
+
+        for phrase in [
+            "系统阶段规划、总纲/manifest扩窗锁定、分阶段细纲",
+            "MYNOVEL:WINDOW",
+            "规划窗口协议版本",
+            "当前剧情预算锁",
+            "forbidden_early_completion",
+            "reserved_for_later",
+            "protagonist_progress_cap",
+            "system_progress_cap",
+            "next_stage_forbidden",
+            "five_chapter_budget_status",
+            "阶段退出条件是否只允许最后窗口完成",
+            "是否提前完成宏观阶段核心目标或退出条件",
+            "剩余剧情是否仍足以支撑剩余窗口",
+        ]:
+            self.assertIn(
+                phrase,
+                skill + workflow + structure + system_prompt + prepare_prompt + outline_prompt,
+            )
+
+        self.assertIn("未来 50 章的期末目标只能写入计划态", read_doc("references/系统设计与运营.md"))
+        self.assertIn("不得提前写入主角/系统运行态仓库", outline_prompt)
+
     def test_config_compresses_only_dead_or_offline_characters(self):
         structure = read_doc("references/项目结构与迁移.md")
 
@@ -139,7 +170,7 @@ class TestWorkflowContractDocs(unittest.TestCase):
         workflow = read_doc("references/范文与创作依据.md")
 
         for phrase in [
-            r"D:\ai小说\小说\范文",
+            "长篇范文库",
             "<平台>范文",
             "<大类题材>",
             "番茄范文",
@@ -382,6 +413,24 @@ class TestWorkflowContractDocs(unittest.TestCase):
         for phrase in ["样本少于 5", "开书方案.md", "不编造榜单数据"]:
             self.assertIn(phrase, scan + prompt)
 
+    def test_working_copy_review_mode_preserves_fact_gate_without_chain_attestation(self):
+        skill = read_doc("SKILL.md")
+        context = read_doc("references/长篇上下文与一致性.md")
+        workflow = read_doc("references/正文生产与审修.md")
+        structure = read_doc("references/项目结构与迁移.md")
+        contract = read_doc("references/自动化脚本契约.md")
+        prompt = read_doc("prompts/正文审查与修复提示词.md")
+        for doc in [skill, context, workflow, structure, contract, prompt]:
+            self.assertIn("working_copy", doc)
+        for phrase in [
+            "--allow-working-copy",
+            "eligible_for_review_passed: false",
+            "working_copy_anchor",
+            "base_committed_sha256",
+            "不得推进 commit head",
+        ]:
+            self.assertIn(phrase, skill + context + workflow + structure + contract + prompt)
+
     def test_skill_metadata_and_archive_contract_are_normalized(self):
         skill = read_doc("SKILL.md")
         structure = read_doc("references/项目结构与迁移.md")
@@ -421,12 +470,9 @@ class TestWorkflowContractDocs(unittest.TestCase):
         self.assertNotIn("第1-50章常规分阶段细纲", skill)
         contract = read_doc("references/自动化脚本契约.md")
 
-        self.assertIn("py -3", contract)
-        self.assertIn("Windows", contract)
-        self.assertIn("Python 3.13", contract)
-        self.assertIn("不要先调用 `python`", contract)
-        self.assertIn("直接使用 `py -3", skill)
-        self.assertIn("不得因 `python` 命令不可用而判定缺少 Python 环境", skill)
+        for phrase in ["py -3", "python3", "<Skill根目录>", "当前平台"]:
+            self.assertIn(phrase, contract + skill)
+        self.assertIn("不得因某一个命令名不可用", contract + skill)
 
     def test_epub_sync_contract_in_skill_docs(self):
         project = read_doc("references/EPUB导出与同步.md")

@@ -163,6 +163,22 @@ class TestRankScan(unittest.TestCase):
             self.assertEqual(payload["status"], "dedup_conflict")
             self.assertTrue(payload["conflicts"])
 
+    def test_same_work_id_with_different_urls_cannot_inflate_market_count(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            records = self.make_records(5)
+            for index, record in enumerate(records["records"]):
+                record.update({
+                    "title": "同一本书",
+                    "author": "同一作者",
+                    "work_id": "same-work",
+                    "url": f"https://example.test/book/same/{index}",
+                })
+            data = self.run_scan(records, Path(temp_dir))
+            payload = json.loads(data.stdout)
+            self.assertEqual(data.returncode, 5)
+            self.assertEqual(payload["status"], "dedup_conflict")
+            self.assertEqual(payload["market_validation_count"], 1)
+
     def test_reused_archive_does_not_rewrite(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             archive = Path(temp_dir) / "arch"
@@ -173,6 +189,39 @@ class TestRankScan(unittest.TestCase):
             payload2 = json.loads(data2.stdout)
             self.assertTrue(payload2["reused"])
             self.assertEqual(Path(path).stat().st_mtime, mtime)
+
+    def test_corrupted_existing_archive_is_not_reused(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive = Path(temp_dir) / "arch"
+            data1 = self.run_scan(self.make_records(5), archive)
+            path = Path(json.loads(data1.stdout)["archive_path"])
+            path.write_text("{}", encoding="utf-8")
+
+            data2 = self.run_scan(self.make_records(5), archive)
+            payload2 = json.loads(data2.stdout)
+            self.assertEqual(data2.returncode, 6)
+            self.assertEqual(payload2["status"], "archive_io_error")
+            self.assertFalse(payload2["reused"])
+
+    def test_default_archive_root_uses_workspace_when_novel_layer_is_absent(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir) / "workspace"
+            workspace.mkdir()
+            input_path = Path(temp_dir) / "rank.json"
+            input_path.write_text(
+                json.dumps(self.make_records(5), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            env = dict(__import__("os").environ)
+            env["MYNOVEL_WORKSPACE"] = str(workspace)
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPTS / "扫榜.py"), "--input", str(input_path)],
+                cwd=str(ROOT), text=True, encoding="utf-8", env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            archive_path = Path(json.loads(completed.stdout)["archive_path"])
+            self.assertEqual(archive_path.parent, workspace / "范文" / "扫榜")
 
     def test_market_count_requires_management_or_system_loop(self):
         with tempfile.TemporaryDirectory() as temp_dir:

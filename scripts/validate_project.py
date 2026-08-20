@@ -24,6 +24,16 @@ PLAN_NODE_RE = re.compile(
     r"<!--\s*MYNOVEL:PLAN-NODE:\1:END\s*-->",
     re.DOTALL,
 )
+WINDOW_RE = re.compile(
+    r"<!--\s*MYNOVEL:WINDOW:([a-z0-9-]+):START\s*-->(.*?)"
+    r"<!--\s*MYNOVEL:WINDOW:\1:END\s*-->",
+    re.DOTALL,
+)
+BUDGET_ROW_RE = re.compile(
+    r"^\|\s*第([1-9][0-9]*)-([1-9][0-9]*)章\s*\|"
+    r"\s*([^|]*)\|\s*([^|]*)\|\s*([^|]*)\|\s*([^|]*)\|\s*$",
+    re.MULTILINE,
+)
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 BUILD_ID_RE = re.compile(r"^epub-[0-9a-f]{12}-[0-9a-f]{12}$")
 
@@ -97,7 +107,7 @@ def check_html_anchors(project_root: Path):
     seen = set()
     anchor_re = re.compile(r"<!--\s*MYNOVEL:([A-Z-]+):([a-z0-9-]+):(START|END)\s*-->")
     for path in sorted(project_root.rglob("*.md")):
-        if "legacy" in path.parts or "修复记录" in path.parts:
+        if "legacy" in path.parts or "修复记录" in path.parts or path.name.startswith("~$") or path.name.startswith("."):
             continue
         counts = {}
         for kind, node, edge in anchor_re.findall(path.read_text(encoding="utf-8")):
@@ -166,6 +176,232 @@ def parse_window(raw: str | None) -> tuple[int, int] | None:
     return (int(match.group(1)), int(match.group(2))) if match else None
 
 
+def contract_value_present(raw: str | None) -> bool:
+    return raw not in (None, "", "null", "[]")
+
+
+def expected_window_id(start: int, end: int) -> str:
+    return f"window-{start:04d}-{end:04d}"
+
+
+def meaningful_budget_cell(value: str) -> bool:
+    compact = re.sub(r"\s+", "", value).lower()
+    placeholders = {
+        "本组职责", "本组结算", "阶段退出", "后续负载",
+        "允许结算", "禁止越过", "必须留给后组",
+        "待定", "待补", "待填写", "占位", "todo", "tbd",
+    }
+    return bool(compact) and compact not in placeholders and not re.fullmatch(r"[.…·_\-/—]+", compact)
+
+
+def check_window_contracts(project_root: Path, core: dict, authority: dict):
+    protocol = core.get("规划窗口协议版本")
+    if protocol in (None, "", "null"):
+        return True, []
+    errors = []
+    if protocol != "1":
+        return prefixed("window_contract", [f"unsupported protocol version: {protocol}"])
+
+    raw_path = authority.get("总大纲")
+    if not raw_path or raw_path == "null" or not (project_root / raw_path).is_file():
+        return prefixed("window_contract", ["total outline unavailable"])
+    text = (project_root / raw_path).read_text(encoding="utf-8")
+
+    stages = {}
+    for anchor_id, block in STAGE_RE.findall(text):
+        fields = fields_from_block(block)
+        try:
+            start = int(fields.get("chapter_start", ""))
+            end = int(fields.get("chapter_end", ""))
+        except ValueError:
+            continue
+        stages[anchor_id] = {
+            "start": start,
+            "end": end,
+            "exit_condition": fields.get("exit_condition"),
+        }
+
+    required = {
+        "window_id", "stage_id", "chapter_start", "chapter_end", "window_status",
+        "stage_exit_allowed", "system_plan", "must_complete", "advance_only",
+        "protagonist_progress_cap", "system_progress_cap", "forbidden_early_completion",
+        "reserved_for_later", "end_unresolved",
+        "next_stage_forbidden", "next_window_id", "five_chapter_budget_status",
+    }
+    windows = {}
+    for anchor_id, block in WINDOW_RE.findall(text):
+        fields = fields_from_block(block)
+        missing = sorted(required - fields.keys())
+        if missing:
+            errors.append(f"window {anchor_id} missing fields: {missing}")
+            continue
+        window_id = fields["window_id"]
+        if window_id != anchor_id:
+            errors.append(f"window anchor/field mismatch: {anchor_id}")
+        if window_id in windows:
+            errors.append(f"duplicate window_id: {window_id}")
+            continue
+        try:
+            start = int(fields["chapter_start"])
+            end = int(fields["chapter_end"])
+        except ValueError:
+            errors.append(f"window range must be integer: {window_id}")
+            continue
+        if start <= 0 or end < start or end - start + 1 > 50:
+            errors.append(f"invalid window range: {window_id}")
+        if window_id != expected_window_id(start, end):
+            errors.append(f"window_id/range mismatch: {window_id}")
+        status = fields["window_status"]
+        if status not in {"reserved", "prepared", "active", "consumed", "superseded"}:
+            errors.append(f"invalid window_status: {window_id}")
+        if fields["stage_exit_allowed"] not in {"true", "false"}:
+            errors.append(f"stage_exit_allowed must be true/false: {window_id}")
+        budget_status = fields["five_chapter_budget_status"]
+        if budget_status not in {"pending", "locked"}:
+            errors.append(f"invalid five_chapter_budget_status: {window_id}")
+        if budget_status == "locked":
+            if not re.search(r"^##\s+五章剧情预算\s*$", block, re.MULTILINE):
+                errors.append(f"locked window missing five-chapter budget table: {window_id}")
+            budget_rows = BUDGET_ROW_RE.findall(block)
+            budget_ranges = [(int(row[0]), int(row[1])) for row in budget_rows]
+            expected_ranges = []
+            cursor = start
+            while cursor <= end:
+                group_end = min(cursor + 4, end)
+                expected_ranges.append((cursor, group_end))
+                cursor = group_end + 1
+            if budget_ranges != expected_ranges:
+                errors.append(
+                    f"five-chapter budget coverage mismatch: {window_id}: "
+                    f"got={budget_ranges} expected={expected_ranges}"
+                )
+            cell_names = ("responsibility", "settlement", "boundary", "reserve")
+            for row in budget_rows:
+                row_label = f"第{row[0]}-{row[1]}章"
+                for name, value in zip(cell_names, row[2:]):
+                    if not meaningful_budget_cell(value):
+                        errors.append(
+                            f"five-chapter budget cell empty/placeholder: "
+                            f"{window_id}:{row_label}:{name}"
+                        )
+        for key in (
+            "must_complete", "protagonist_progress_cap", "system_progress_cap",
+            "forbidden_early_completion", "end_unresolved", "next_stage_forbidden",
+        ):
+            if not contract_value_present(fields.get(key)):
+                errors.append(f"{key} empty: {window_id}")
+        stage = stages.get(fields["stage_id"])
+        if stage is None:
+            errors.append(f"unknown stage_id for window {window_id}: {fields['stage_id']}")
+        elif start < stage["start"] or end > stage["end"]:
+            errors.append(f"window outside stage range: {window_id}")
+        system_plan = fields["system_plan"]
+        if system_plan != "null":
+            try:
+                _, system_path = tx.project_relative_path(project_root, system_plan)
+            except ValueError as exc:
+                errors.append(f"{window_id}: {exc}")
+            else:
+                if status in {"prepared", "active"} and not system_path.is_file():
+                    errors.append(f"prepared window system plan missing: {window_id}: {system_plan}")
+        elif status in {"prepared", "active"}:
+            errors.append(f"prepared window requires system_plan: {window_id}")
+        windows[window_id] = {
+            "fields": fields,
+            "block": block,
+            "start": start,
+            "end": end,
+        }
+
+    if not windows:
+        return prefixed("window_contract", errors + ["protocol enabled but no MYNOVEL:WINDOW blocks"])
+
+    by_stage = {}
+    for window_id, item in windows.items():
+        if item["fields"]["window_status"] == "superseded":
+            continue
+        by_stage.setdefault(item["fields"]["stage_id"], []).append((window_id, item))
+    for stage_id, stage_windows in by_stage.items():
+        stage = stages.get(stage_id)
+        if stage is None:
+            continue
+        if not contract_value_present(stage.get("exit_condition")):
+            errors.append(f"stage exit_condition empty: {stage_id}")
+        ordered = sorted(stage_windows, key=lambda pair: (pair[1]["start"], pair[1]["end"]))
+        expected_start = stage["start"]
+        for index, (window_id, item) in enumerate(ordered):
+            fields = item["fields"]
+            if item["start"] != expected_start:
+                errors.append(
+                    f"window coverage gap/overlap in {stage_id}: expected {expected_start}, got {item['start']}"
+                )
+            expected_start = item["end"] + 1
+            is_last = item["end"] == stage["end"]
+            allowed = fields["stage_exit_allowed"] == "true"
+            if allowed != is_last:
+                errors.append(f"stage_exit_allowed inconsistent with stage end: {window_id}")
+            if is_last:
+                if fields["next_window_id"] != "null":
+                    errors.append(f"final stage window next_window_id must be null: {window_id}")
+            else:
+                if not contract_value_present(fields.get("reserved_for_later")):
+                    errors.append(f"reserved_for_later empty before stage end: {window_id}")
+                next_id = fields["next_window_id"]
+                next_item = windows.get(next_id)
+                if next_item is None:
+                    errors.append(f"next_window_id missing target: {window_id}: {next_id}")
+                elif next_item["fields"]["stage_id"] != stage_id or next_item["start"] != item["end"] + 1:
+                    errors.append(f"next_window_id is not the next continuous window: {window_id}: {next_id}")
+            if index < len(ordered) - 1 and fields["next_window_id"] != ordered[index + 1][0]:
+                errors.append(f"next_window_id order mismatch: {window_id}")
+        if expected_start != stage["end"] + 1:
+            errors.append(
+                f"window contracts do not cover full stage {stage_id}: end at {expected_start - 1}, expected {stage['end']}"
+            )
+
+    configured = [
+        (
+            "当前", core.get("当前计划窗口"), core.get("当前窗口合同"),
+            core.get("当前剧情预算锁"), authority.get("当前系统计划"),
+        ),
+        (
+            "下一", core.get("下一计划窗口"), core.get("下一窗口合同"),
+            core.get("下一剧情预算锁"), authority.get("下一系统计划"),
+        ),
+    ]
+    for label, raw_window, contract_id, lock, authority_system_plan in configured:
+        parsed = parse_window(raw_window)
+        if parsed is None:
+            if (
+                contract_id not in (None, "", "null")
+                or lock not in (None, "", "null")
+                or authority_system_plan not in (None, "", "null")
+            ):
+                errors.append(f"{label}计划窗口为 null 时合同、预算锁和系统计划也必须为 null")
+            continue
+        if not contract_value_present(contract_id):
+            errors.append(f"{label}计划窗口缺少窗口合同")
+            continue
+        if lock != "locked":
+            errors.append(f"{label}剧情预算锁必须为 locked")
+        item = windows.get(contract_id)
+        if item is None:
+            errors.append(f"{label}窗口合同不存在: {contract_id}")
+            continue
+        if (item["start"], item["end"]) != parsed:
+            errors.append(f"{label}窗口合同范围与计划窗口不一致: {contract_id}")
+        if item["fields"]["window_status"] not in {"prepared", "active", "consumed"}:
+            errors.append(f"{label}窗口合同状态不可用于细纲: {contract_id}")
+        if item["fields"]["five_chapter_budget_status"] != "locked":
+            errors.append(f"{label}窗口合同五章剧情预算未锁定: {contract_id}")
+        if authority_system_plan in (None, "", "null"):
+            errors.append(f"{label}窗口缺少 manifest 系统计划路径")
+        elif item["fields"]["system_plan"] != authority_system_plan:
+            errors.append(f"{label}系统计划路径与窗口合同不一致: {contract_id}")
+
+    return prefixed("window_contract", errors)
+
+
 def parse_task_refs(raw: str) -> bool:
     if raw == "[]":
         return True
@@ -173,6 +409,8 @@ def parse_task_refs(raw: str) -> bool:
 
 
 def check_plan_nodes(project_root: Path, core: dict, authority: dict):
+    if core.get("project_status") in {"开书方案", "系统设计", "总纲"}:
+        return True, []
     errors = []
     raw_path = authority.get("当前剧情细纲")
     window = parse_window(core.get("当前计划窗口"))
@@ -381,6 +619,7 @@ def check_project(project_root: Path):
         "plan": check_stale_runtime_state_in_plan(project_root),
         "anchor": check_html_anchors(project_root),
         "stage": check_stage_schema(project_root, core, authority),
+        "window_contract": check_window_contracts(project_root, core, authority),
         "plan_schema": check_plan_nodes(project_root, core, authority),
         "chain": check_commit_chain(project_root, core),
         "projection": check_projection_and_pollution(project_root, core, authority),

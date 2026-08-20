@@ -16,6 +16,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 import sys
 import urllib.parse
 from collections import Counter
@@ -32,7 +33,17 @@ VALID_FIELDS = {
 }
 REQUIRED_FIELDS = {"source_platform", "list_name", "snapshot_date", "title", "url", "captured_at"}
 MARKET_DIMENSIONS = {"management_loop", "system_loop"}
-ARCHIVE_ROOT = Path(r"D:\ai小说\小说\范文\扫榜")
+WORKSPACE_ROOT = Path(os.environ.get("MYNOVEL_WORKSPACE", Path.cwd())).expanduser()
+
+
+def default_archive_root(workspace_root: Path) -> Path:
+    project_scan_root = workspace_root / "小说"
+    if not project_scan_root.is_dir():
+        project_scan_root = workspace_root
+    return project_scan_root / "范文" / "扫榜"
+
+
+ARCHIVE_ROOT = default_archive_root(WORKSPACE_ROOT)
 
 EXIT_READY = 0
 EXIT_SCHEMA_INVALID = 2
@@ -205,35 +216,42 @@ def load_records(path: Path):
 
 def dedupe(records: list[dict]):
     """平台内去重：键依次为 source_platform+work_id、规范化 URL。书名不能单独判重。"""
-    kept: dict[tuple, dict] = {}
+    kept: list[dict] = []
+    key_to_index: dict[tuple, int] = {}
     conflicts: list[dict] = []
     for record in records:
         keys = []
         if record.get("work_id"):
             keys.append(("work", record["source_platform"], record["work_id"]))
         keys.append(("url", record["source_platform"], record["url"]))
-        merged = False
+        matched_indices = {key_to_index[key] for key in keys if key in key_to_index}
+        if not matched_indices:
+            index = len(kept)
+            kept.append(record)
+            for key in keys:
+                key_to_index[key] = index
+            continue
+
+        index = min(matched_indices)
+        existing = kept[index]
+        conflict = len(matched_indices) > 1 or not (
+            existing["title"] == record["title"]
+            and existing["author"] == record["author"]
+            and existing["url"] == record["url"]
+        )
+        if conflict:
+            conflicts.append({
+                "key": [list(key) for key in keys],
+                "existing": existing,
+                "incoming": record,
+                "reason": "same work key but conflicting core fields",
+            })
+            continue
+        if record["captured_at"] >= existing["captured_at"]:
+            kept[index] = record
         for key in keys:
-            existing = kept.get(key)
-            if existing is not None:
-                # 相同键、核心字段一致 → 保留 captured_at 最新
-                if (existing["title"] == record["title"]
-                        and existing["author"] == record["author"]
-                        and existing["url"] == record["url"]):
-                    if record["captured_at"] >= existing["captured_at"]:
-                        kept[key] = record
-                else:
-                    conflicts.append({
-                        "key": list(key),
-                        "existing": existing,
-                        "incoming": record,
-                        "reason": "same key but conflicting core fields",
-                    })
-                merged = True
-                break
-        if not merged:
-            kept[keys[-1]] = record
-    return list(kept.values()), conflicts
+            key_to_index[key] = index
+    return kept, conflicts
 
 
 def cross_platform_groups(records: list[dict]):
@@ -276,12 +294,17 @@ def count_market_records(records: list[dict]) -> tuple[int, int]:
     """market_validation_count：去重+跨平台分组后含经营证据的不同作品；
     fresh_market_validation_count：再限制每条 snapshot_date 均在过去 0-30 日。"""
     market = [r for r in records if set(r["evidence_dimensions"]) & MARKET_DIMENSIONS]
-    # 同一作品（canonical 或平台+url）只计一次
+    # 同一作品按 canonical、平台内 work_id、规范化 URL 依次降级，只计一次。
     seen = set()
     market_dedup = []
     for r in market:
         cid = r.get("canonical_work_id")
-        key = ("canonical", cid) if cid else ("url", r["source_platform"], r["url"])
+        if cid:
+            key = ("canonical", cid)
+        elif r.get("work_id"):
+            key = ("work", r["source_platform"], r["work_id"])
+        else:
+            key = ("url", r["source_platform"], r["url"])
         if key not in seen:
             seen.add(key)
             market_dedup.append(r)
@@ -385,9 +408,9 @@ def main():
             target = archive_dir / filename
             if target.is_file():
                 existing_hash = hashlib.sha256(target.read_bytes()).hexdigest()
-                if existing_hash == sha256_text(
-                        target.read_text(encoding="utf-8")):
-                    reused = True
+                if existing_hash != archive_sha:
+                    raise OSError(f"archive hash mismatch: {target}")
+                reused = True
                 archive_path = str(target)
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)

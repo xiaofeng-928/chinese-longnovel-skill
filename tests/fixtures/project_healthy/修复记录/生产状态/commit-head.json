@@ -7,9 +7,9 @@
   "projection_hashes": {
     "plan/总大纲.md": "a609b03a01f0f29859ef504faef3208f1231a726f514fdecf7ce6f4496d2c9bf",
     "plan/大纲_第1-50章.md": "e7a656d4be17a64d506faa8ce0dc1ad2a3354d662b32ab02ba85d174e3f39d16",
-    "plan/系统发展_第1-50章.md": "ead29c92b3de894b4778f9af475978a5bca69a59e037418ab0d00387dea92f5d"
+    "plan/系统发展_第1-50章.md": "e6178c20db9d9f71c7bcbd820e95423dceb8dc9986ca17b0f4c31568ffe76671"
   },
   "chain_hash": "09851e7bb75b1aada89ef7c0f921d5b4739f3e6581d6617ee60f0e25ba1df145",
   "operation_mode": "normal",
-  "commit_hash": "0c3f87f0bc5da4326c2aab6ca27eab3e4acb96536bd858585cf455319b2f1c20"
+  "commit_hash": "d4831c11ae592f9f7f7adebb9a2f30ae30f623f71c1f744958583e8b1f639842"
 }

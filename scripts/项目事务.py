@@ -97,7 +97,12 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_bytes(data)
-    os.replace(str(tmp), str(path))
+    try:
+        os.replace(str(tmp), str(path))
+    except PermissionError:
+        path.write_bytes(data)
+        tmp.unlink(missing_ok=True)
+
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -740,7 +745,8 @@ def materialize_transaction_assets(project_root: Path, transaction_id: str,
         _, snapshot = project_relative_path(transaction_dir, evidence["snapshot_path"])
         if not snapshot.is_file() or sha256_file(snapshot) != evidence["sha256"]:
             raise ValueError(f"immutable projection asset invalid: {relative}")
-        atomic_write_bytes(target, snapshot.read_bytes())
+        if not target.is_file() or sha256_file(target) != evidence["sha256"]:
+            atomic_write_bytes(target, snapshot.read_bytes())
         result[relative] = evidence["sha256"]
     return result
 

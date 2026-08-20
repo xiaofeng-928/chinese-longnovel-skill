@@ -29,9 +29,12 @@ STATE_VALIDATION_STATES = {"summary_staged", "commit_prepared"}
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 NODE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
 ATTEMPT_ID_RE = re.compile(r"^attempt-[0-9]{4,}$")
-PROTECTED_VALUE_PATTERN = re.compile(
-    r"(生存点|积分|余额|点数|库存|任务|模块|等级|时间|小时|天|公里|度|分|元|%)"
-    r"\s*[:：]?\s*(-?\d+(?:\.\d+)?)"
+PROTECTED_PREFIX_PATTERN = re.compile(
+    r"(生存点|积分|余额|点数|库存|任务|模块|等级|时间)"
+    r"\s*[:：]?\s*(-?\d+(?:\.\d+)?%?)"
+)
+PROTECTED_SUFFIX_PATTERN = re.compile(
+    r"((?:零下|-)?\d+(?:\.\d+)?)\s*(小时|分钟|公里|千米|米|天|度|元|级|点|%|％)"
 )
 NEGATION_MARKERS = ["不是", "没有", "未", "无", "禁止", "不得", "绝不", "从不", "无法", "不可能"]
 
@@ -86,8 +89,16 @@ def compare_sequences(source_text: str, candidate_text: str):
     errors = []
     source = strip_markdown(source_text)
     candidate = strip_markdown(candidate_text)
-    src_vals = sorted(PROTECTED_VALUE_PATTERN.findall(source))
-    cand_vals = sorted(PROTECTED_VALUE_PATTERN.findall(candidate))
+
+    def protected_values(text: str) -> list[str]:
+        values = [f"{label}={value}" for label, value in PROTECTED_PREFIX_PATTERN.findall(text)]
+        values.extend(
+            f"{unit}={value}" for value, unit in PROTECTED_SUFFIX_PATTERN.findall(text)
+        )
+        return sorted(values)
+
+    src_vals = protected_values(source)
+    cand_vals = protected_values(candidate)
     if src_vals != cand_vals:
         errors.append(f"protected value changed: source={src_vals} candidate={cand_vals}")
     src_negs = sum(source.count(marker) for marker in NEGATION_MARKERS)
@@ -137,7 +148,8 @@ def validate_iso_timestamp(value: str, label: str) -> list[str]:
 
 def validate_review_report(path: Path, *, kind: str, node_id: str, attempt_id: str,
                            source_hash: str, candidate_hash: str,
-                           fact_lock_hash: str) -> list[str]:
+                           fact_lock_hash: str,
+                           review_subject: str | None = None) -> list[str]:
     if not path.is_file():
         return [f"missing {kind} review report: {path.name}"]
     front = parse_frontmatter(path)
@@ -145,6 +157,10 @@ def validate_review_report(path: Path, *, kind: str, node_id: str, attempt_id: s
         "review_id", "reviewer_id", "node_id", "attempt_id", "review_kind", "source_sha256", "reviewed_sha256",
         "fact_lock_sha256", "review_prompt_version", "reviewed_at", "total_result",
     ]
+    if review_subject == "working_copy":
+        required.extend([
+            "review_subject", "base_committed_sha256", "working_copy_sha256",
+        ])
     errors = validate_required_frontmatter(front, required, kind)
     expected = {
         "node_id": node_id,
@@ -155,6 +171,12 @@ def validate_review_report(path: Path, *, kind: str, node_id: str, attempt_id: s
         "fact_lock_sha256": fact_lock_hash,
         "total_result": "pass",
     }
+    if review_subject == "working_copy":
+        expected.update({
+            "review_subject": "working_copy",
+            "base_committed_sha256": source_hash,
+            "working_copy_sha256": candidate_hash,
+        })
     for key, value in expected.items():
         if front.get(key) and front[key] != value:
             errors.append(f"{kind} review {key} mismatch")
@@ -169,18 +191,21 @@ def validate_review_report(path: Path, *, kind: str, node_id: str, attempt_id: s
         errors.extend(validate_iso_timestamp(front["reviewed_at"], f"{kind} reviewed_at"))
     text = path.read_text(encoding="utf-8")
     found = {
-        match.group(1): match.group(2)
+        match.group(1): (match.group(2), match.group(3).strip())
         for match in re.finditer(
             r"^\|\s*(event_order|facts|numbers|causality|polarity|coreference|"
             r"character_knowledge|dialogue_intent|motivation|pov|timeline|"
-            r"system_boundary|chapter_hook)\s*\|\s*(pass|fail)\s*\|",
+            r"system_boundary|chapter_hook)\s*\|\s*(pass|fail)\s*\|\s*([^|\r\n]*)\|\s*$",
             text,
             re.MULTILINE,
         )
     }
     for dimension in REVIEW_DIMENSIONS:
-        if found.get(dimension) != "pass":
+        result, evidence = found.get(dimension, (None, ""))
+        if result != "pass":
             errors.append(f"{kind} review dimension is not pass: {dimension}")
+        elif not evidence or evidence.lower() in {"...", "…", "-", "none", "n/a"}:
+            errors.append(f"{kind} review dimension evidence is empty: {dimension}")
     return errors
 
 
@@ -244,10 +269,17 @@ def validate_state_evidence(attempt_dir: Path, *, node_id: str, attempt_id: str,
 
 def check_attempt(attempt_dir: Path, *, project_root: Path | None = None,
                   require_reviews: bool = False,
-                  require_state_validation: bool = False):
+                  require_state_validation: bool = False,
+                  allow_working_copy: bool = False):
     attempt_dir = Path(attempt_dir)
     project_root = Path(project_root) if project_root else infer_project_root(attempt_dir)
-    report = {"ok": True, "attempt_dir": str(attempt_dir), "checks": {}}
+    report = {
+        "ok": True,
+        "attempt_dir": str(attempt_dir),
+        "validation_mode": "working_copy" if allow_working_copy else "strict",
+        "eligible_for_review_passed": not allow_working_copy,
+        "checks": {},
+    }
     workspace = attempt_dir / "workspace"
     paths = {
         "source": workspace / "source.md",
@@ -308,14 +340,67 @@ def check_attempt(attempt_dir: Path, *, project_root: Path | None = None,
         metadata_errors.append("state node_id/attempt_id mismatch")
     report["checks"]["metadata"] = {"ok": not metadata_errors, "errors": metadata_errors}
 
+    subject_errors = []
+    subject_warnings = []
+    review_subject = front.get("review_subject", "")
+    if allow_working_copy:
+        if not require_reviews:
+            subject_errors.append("working copy validation requires --require-reviews")
+        subject_errors.extend(validate_required_frontmatter(
+            front,
+            ["review_subject", "base_committed_sha256", "working_copy_sha256", "working_copy_path"],
+            "working copy",
+        ))
+        if review_subject and review_subject != "working_copy":
+            subject_errors.append("working copy review_subject must be working_copy")
+        for key, actual in (
+            ("base_committed_sha256", source_hash),
+            ("working_copy_sha256", candidate_hash),
+        ):
+            value = front.get(key)
+            if value and not SHA256_RE.fullmatch(value):
+                subject_errors.append(f"working copy {key} invalid")
+            elif value and value != actual:
+                subject_errors.append(f"working copy {key} mismatch")
+        raw_working_path = front.get("working_copy_path")
+        if raw_working_path:
+            try:
+                working_path = resolve_source_path(raw_working_path, attempt_dir, project_root)
+            except ValueError as exc:
+                subject_errors.append(str(exc))
+            else:
+                if not working_path.is_file():
+                    subject_errors.append(f"working copy file missing: {raw_working_path}")
+                elif sha256_file(working_path) != candidate_hash:
+                    subject_errors.append("working copy file does not match candidate.md")
+        if state.get("status") == "review_passed":
+            subject_errors.append("working copy evidence cannot use review_passed status")
+        if require_state_validation:
+            subject_errors.append("working copy evidence cannot enter state-validation/commit preparation")
+        subject_warnings.append(
+            "working copy validation is provisional and cannot create review_passed, rename正文, or attest the current commit chain"
+        )
+    elif review_subject == "working_copy":
+        subject_errors.append("working-copy attempt requires --allow-working-copy")
+    report["checks"]["review_subject"] = {
+        "ok": not subject_errors,
+        "errors": subject_errors,
+        "warnings": subject_warnings,
+    }
+
     lock_errors = []
+    lock_warnings = []
     fact_locks = read_json(paths["fact_lock"])
     lock_ids = set()
+    immutable_source_text = paths["source"].read_text(encoding="utf-8")
+    candidate_text = paths["candidate"].read_text(encoding="utf-8")
     if not isinstance(fact_locks, list) or not fact_locks:
         lock_errors.append("fact-lock.json must be a non-empty list")
         fact_locks = []
     for lock in fact_locks:
         required = {"lock_id", "category", "expected_value", "source_path", "source_anchor", "source_sha256"}
+        if allow_working_copy:
+            required.update({"working_copy_anchor", "working_copy_anchor_sha256"})
         if not isinstance(lock, dict) or not required.issubset(lock):
             lock_errors.append("fact lock missing required fields")
             continue
@@ -328,17 +413,59 @@ def check_attempt(attempt_dir: Path, *, project_root: Path | None = None,
         except ValueError as exc:
             lock_errors.append(str(exc))
             continue
-        if not source_path.is_file():
-            lock_errors.append(f"fact lock source missing: {lock['source_path']}")
-            continue
-        if not SHA256_RE.fullmatch(str(lock["source_sha256"])):
+        declared_hash = str(lock["source_sha256"])
+        if not SHA256_RE.fullmatch(declared_hash):
             lock_errors.append(f"fact lock source hash invalid: {lock_id}")
-        elif sha256_file(source_path) != lock["source_sha256"]:
-            lock_errors.append(f"fact lock source hash changed: {lock_id}")
         anchor = str(lock["source_anchor"])
-        if not anchor or anchor not in source_path.read_text(encoding="utf-8"):
-            lock_errors.append(f"fact lock source anchor missing: {lock_id}")
-    report["checks"]["fact_lock"] = {"ok": not lock_errors, "errors": lock_errors}
+        expected_value = str(lock["expected_value"]).strip()
+        if not expected_value:
+            lock_errors.append(f"fact lock expected_value empty: {lock_id}")
+        elif expected_value not in anchor:
+            lock_errors.append(f"fact lock expected_value missing from source anchor: {lock_id}")
+        if allow_working_copy:
+            immutable_ok = (
+                SHA256_RE.fullmatch(declared_hash)
+                and source_hash == declared_hash
+                and bool(anchor)
+                and anchor in immutable_source_text
+            )
+            if not immutable_ok:
+                lock_errors.append(f"fact lock immutable base evidence invalid: {lock_id}")
+            else:
+                live_ok = (
+                    source_path.is_file()
+                    and sha256_file(source_path) == declared_hash
+                    and anchor in source_path.read_text(encoding="utf-8")
+                )
+                if not live_ok:
+                    lock_warnings.append(
+                        f"fact lock live source drifted; immutable workspace/source.md remains valid: {lock_id}"
+                    )
+            working_anchor = str(lock.get("working_copy_anchor", ""))
+            working_anchor_hash = str(lock.get("working_copy_anchor_sha256", ""))
+            if not working_anchor or working_anchor not in candidate_text:
+                lock_errors.append(f"fact lock working-copy anchor missing: {lock_id}")
+            elif not SHA256_RE.fullmatch(working_anchor_hash):
+                lock_errors.append(f"fact lock working-copy anchor hash invalid: {lock_id}")
+            elif sha256_text(working_anchor) != working_anchor_hash:
+                lock_errors.append(f"fact lock working-copy anchor hash mismatch: {lock_id}")
+            if expected_value and expected_value not in working_anchor:
+                lock_errors.append(f"fact lock expected_value missing from working-copy anchor: {lock_id}")
+        else:
+            if not source_path.is_file():
+                lock_errors.append(f"fact lock source missing: {lock['source_path']}")
+                continue
+            if SHA256_RE.fullmatch(declared_hash) and sha256_file(source_path) != declared_hash:
+                lock_errors.append(f"fact lock source hash changed: {lock_id}")
+            if not anchor or anchor not in source_path.read_text(encoding="utf-8"):
+                lock_errors.append(f"fact lock source anchor missing: {lock_id}")
+            if expected_value and expected_value not in candidate_text:
+                lock_errors.append(f"fact lock expected_value missing from candidate: {lock_id}")
+    report["checks"]["fact_lock"] = {
+        "ok": not lock_errors,
+        "errors": lock_errors,
+        "warnings": lock_warnings,
+    }
 
     status_errors = []
     status = state.get("status")
@@ -353,7 +480,20 @@ def check_attempt(attempt_dir: Path, *, project_root: Path | None = None,
         paths["source"].read_text(encoding="utf-8"),
         paths["candidate"].read_text(encoding="utf-8"),
     )
-    report["checks"]["differences"] = {"ok": diff_ok, "errors": diff_errors}
+    diff_warnings = []
+    if allow_working_copy:
+        polarity_errors = [error for error in diff_errors if error.startswith("negation marker count changed:")]
+        diff_errors = [error for error in diff_errors if error not in polarity_errors]
+        diff_warnings.extend(
+            f"{error}; semantic polarity must still pass both formal reviews"
+            for error in polarity_errors
+        )
+        diff_ok = not diff_errors
+    report["checks"]["differences"] = {
+        "ok": diff_ok,
+        "errors": diff_errors,
+        "warnings": diff_warnings,
+    }
 
     if require_reviews:
         review_errors = []
@@ -368,6 +508,7 @@ def check_attempt(attempt_dir: Path, *, project_root: Path | None = None,
                 source_hash=source_hash,
                 candidate_hash=candidate_hash,
                 fact_lock_hash=fact_lock_hash,
+                review_subject="working_copy" if allow_working_copy else None,
             ))
             if review_path.is_file():
                 review_fronts.append(parse_frontmatter(review_path))
@@ -401,6 +542,11 @@ def main():
     parser.add_argument("--project-root", type=Path)
     parser.add_argument("--require-reviews", action="store_true")
     parser.add_argument("--require-state-validation", action="store_true")
+    parser.add_argument(
+        "--allow-working-copy",
+        action="store_true",
+        help="validate a provisional current 正文/ working-copy attempt without making it commit-eligible",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     report = check_attempt(
@@ -408,6 +554,7 @@ def main():
         project_root=args.project_root,
         require_reviews=args.require_reviews,
         require_state_validation=args.require_state_validation,
+        allow_working_copy=args.allow_working_copy,
     )
     if args.json:
         tool.json_dump(report)
@@ -416,6 +563,9 @@ def main():
         for name, detail in report["checks"].items():
             lines.append(f"[{'OK' if detail['ok'] else 'FAIL'}] {name}")
             lines.extend(f"        {error}" for error in detail["errors"])
+            lines.extend(f"        warning: {warning}" for warning in detail.get("warnings", []))
+        if not report["eligible_for_review_passed"]:
+            lines.append("eligible_for_review_passed: false (working-copy evidence only)")
         lines.append(f"result: {'pass' if report['ok'] else 'fail'}")
         tool.write_stdout("\n".join(lines) + "\n")
     return 0 if report["ok"] else 1

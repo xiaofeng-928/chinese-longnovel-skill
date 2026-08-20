@@ -18,11 +18,18 @@ ATTEMPT_OK = FIXTURES / "attempt_ok"
 ATTEMPT_BROKEN = FIXTURES / "attempt_broken"
 
 
-def write_reviews(attempt: Path):
+def write_reviews(attempt: Path, *, working_copy: bool = False):
     source_hash = vcc.sha256_file(attempt / "workspace" / "source.md")
     candidate_hash = vcc.sha256_file(attempt / "candidate.md")
     lock_hash = vcc.sha256_file(attempt / "fact-lock.json")
     dimensions = "\n".join(f"| {name} | pass | evidence |" for name in vcc.REVIEW_DIMENSIONS)
+    subject_frontmatter = ""
+    if working_copy:
+        subject_frontmatter = (
+            "review_subject: working_copy\n"
+            f"base_committed_sha256: {source_hash}\n"
+            f"working_copy_sha256: {candidate_hash}\n"
+        )
     for kind, reviewer in (("naturalization", "reviewer-naturalization"),
                            ("context", "reviewer-context")):
         path = attempt / "reviews" / f"{kind}.md"
@@ -33,6 +40,7 @@ def write_reviews(attempt: Path):
             "node_id: chapter-0001\nattempt_id: attempt-0001\n"
             f"review_kind: {kind}\nsource_sha256: {source_hash}\n"
             f"reviewed_sha256: {candidate_hash}\nfact_lock_sha256: {lock_hash}\n"
+            f"{subject_frontmatter}"
             "review_prompt_version: review-v3.0\n"
             "reviewed_at: 2026-08-11T10:00:00+00:00\ntotal_result: pass\n---\n"
             "| dimension | result | evidence |\n|---|---|---|\n" + dimensions + "\n",
@@ -65,7 +73,159 @@ def write_state_evidence(attempt: Path):
     )
 
 
+def make_working_copy_attempt(root: Path, *, balance: int = 1000) -> Path:
+    attempt = root / "attempt"
+    shutil.copytree(ATTEMPT_OK, attempt)
+    base_hash = vcc.sha256_file(attempt / "workspace" / "source.md")
+    candidate_text = (
+        "# 第1章 风起\n\n"
+        "雪压在车窗上，他仍旧坐着。"
+        f"生存点余额：{balance}。\n"
+    )
+    working_path = root / "正文" / "第001章_风起（草稿）.md"
+    working_path.parent.mkdir(parents=True)
+    working_path.write_text(candidate_text, encoding="utf-8")
+    (attempt / "candidate.md").write_text(candidate_text, encoding="utf-8")
+    candidate_hash = vcc.sha256_file(attempt / "candidate.md")
+    (attempt / "naturalization.md").write_text(
+        "---\n"
+        "node_id: chapter-0001\n"
+        "attempt_id: attempt-0001\n"
+        f"source_sha256: {base_hash}\n"
+        f"candidate_sha256: {candidate_hash}\n"
+        "prompt_version: repair-v1.0\n"
+        "processed_at: 2026-08-16T10:00:00+00:00\n"
+        "naturalization_result: repaired\n"
+        "review_subject: working_copy\n"
+        f"base_committed_sha256: {base_hash}\n"
+        f"working_copy_sha256: {candidate_hash}\n"
+        f"working_copy_path: {working_path.as_posix()}\n"
+        "---\n# 工作副本记录\n",
+        encoding="utf-8",
+    )
+    current_anchor = f"生存点余额：{balance}"
+    locks = json.loads((attempt / "fact-lock.json").read_text(encoding="utf-8"))
+    locks[0]["source_path"] = working_path.as_posix()
+    locks[0]["working_copy_anchor"] = current_anchor
+    locks[0]["working_copy_anchor_sha256"] = vcc.sha256_text(current_anchor)
+    (attempt / "fact-lock.json").write_text(
+        json.dumps(locks, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (attempt / "state.json").write_text(
+        json.dumps({
+            "status": "review_pending",
+            "node_id": "chapter-0001",
+            "attempt_id": "attempt-0001",
+        }),
+        encoding="utf-8",
+    )
+    return attempt
+
+
 class TestValidateChapterCandidate(unittest.TestCase):
+    def test_working_copy_expression_rewrite_allows_hash_drift_with_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_working_copy_attempt(Path(tmp))
+            strict_report = vcc.check_attempt(attempt)
+            self.assertFalse(strict_report["checks"]["review_subject"]["ok"])
+
+            report = vcc.check_attempt(attempt, allow_working_copy=True)
+            self.assertFalse(report["ok"], report)
+            self.assertFalse(report["eligible_for_review_passed"])
+            self.assertTrue(report["checks"]["fact_lock"]["warnings"])
+            self.assertTrue(report["checks"]["differences"]["warnings"])
+            self.assertTrue(any(
+                "requires --require-reviews" in error
+                for error in report["checks"]["review_subject"]["errors"]
+            ))
+
+    def test_number_before_unit_changes_are_blocked(self):
+        for source, candidate in [
+            ("他走了20公里。", "他走了200公里。"),
+            ("花了100元。", "花了1000元。"),
+            ("成功率50%。", "成功率5%。"),
+            ("温度降到零下20度。", "温度降到零下2度。"),
+            ("温度降到零下20度。", "温度升到20度。"),
+        ]:
+            with self.subTest(source=source, candidate=candidate):
+                ok, errors = vcc.compare_sequences(source, candidate)
+                self.assertFalse(ok)
+                self.assertTrue(any("protected value changed" in error for error in errors))
+
+    def test_fact_lock_expected_value_must_match_source_and_candidate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "attempt"
+            shutil.copytree(ATTEMPT_OK, root)
+            locks = json.loads((root / "fact-lock.json").read_text(encoding="utf-8"))
+            locks[0]["expected_value"] = "900"
+            (root / "fact-lock.json").write_text(
+                json.dumps(locks, ensure_ascii=False), encoding="utf-8"
+            )
+            report = vcc.check_attempt(root)
+            self.assertFalse(report["checks"]["fact_lock"]["ok"])
+            self.assertTrue(any(
+                "expected_value" in error
+                for error in report["checks"]["fact_lock"]["errors"]
+            ))
+
+    def test_review_dimensions_require_nonempty_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "attempt"
+            shutil.copytree(ATTEMPT_OK, root)
+            state_path = root / "state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state["status"] = "review_pending"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            write_reviews(root)
+            for path in (root / "reviews").glob("*.md"):
+                path.write_text(
+                    path.read_text(encoding="utf-8").replace(
+                        "| pass | evidence |", "| pass | |"
+                    ),
+                    encoding="utf-8",
+                )
+            report = vcc.check_attempt(root, require_reviews=True)
+            self.assertFalse(report["checks"]["reviews"]["ok"])
+            self.assertTrue(any(
+                "evidence is empty" in error
+                for error in report["checks"]["reviews"]["errors"]
+            ))
+
+    def test_working_copy_protected_value_change_still_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_working_copy_attempt(Path(tmp), balance=900)
+            report = vcc.check_attempt(attempt, allow_working_copy=True)
+            self.assertFalse(report["ok"])
+            self.assertFalse(report["checks"]["differences"]["ok"])
+            self.assertTrue(any(
+                "protected value changed" in error
+                for error in report["checks"]["differences"]["errors"]
+            ))
+
+    def test_working_copy_reviews_are_provisional_and_reject_review_passed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_working_copy_attempt(Path(tmp))
+            write_reviews(attempt, working_copy=True)
+            report = vcc.check_attempt(
+                attempt,
+                allow_working_copy=True,
+                require_reviews=True,
+            )
+            self.assertTrue(report["ok"], report)
+            self.assertFalse(report["eligible_for_review_passed"])
+
+            state_path = attempt / "state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state["status"] = "review_passed"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            report = vcc.check_attempt(
+                attempt,
+                allow_working_copy=True,
+                require_reviews=True,
+            )
+            self.assertFalse(report["checks"]["review_subject"]["ok"])
+
     def test_not_requested_requires_byte_identical_candidate(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "attempt"
