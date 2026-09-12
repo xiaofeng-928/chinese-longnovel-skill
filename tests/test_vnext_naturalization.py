@@ -18,17 +18,25 @@ ATTEMPT_OK = FIXTURES / "attempt_ok"
 ATTEMPT_BROKEN = FIXTURES / "attempt_broken"
 
 
-def write_reviews(attempt: Path, *, working_copy: bool = False):
+def write_reviews(attempt: Path, *, subject: str | None = None):
     source_hash = vcc.sha256_file(attempt / "workspace" / "source.md")
     candidate_hash = vcc.sha256_file(attempt / "candidate.md")
     lock_hash = vcc.sha256_file(attempt / "fact-lock.json")
     dimensions = "\n".join(f"| {name} | pass | evidence |" for name in vcc.REVIEW_DIMENSIONS)
     subject_frontmatter = ""
-    if working_copy:
+    if subject == "working_copy":
         subject_frontmatter = (
             "review_subject: working_copy\n"
             f"base_committed_sha256: {source_hash}\n"
             f"working_copy_sha256: {candidate_hash}\n"
+        )
+    elif subject == "repair":
+        approved_hash = vcc.sha256_file(attempt / "approved-changes.json")
+        subject_frontmatter = (
+            "review_subject: repair\n"
+            f"base_committed_sha256: {source_hash}\n"
+            f"repair_candidate_sha256: {candidate_hash}\n"
+            f"approved_changes_sha256: {approved_hash}\n"
         )
     for kind, reviewer in (("naturalization", "reviewer-naturalization"),
                            ("context", "reviewer-context")):
@@ -48,25 +56,34 @@ def write_reviews(attempt: Path, *, working_copy: bool = False):
         )
 
 
-def write_state_evidence(attempt: Path):
+def write_state_evidence(attempt: Path, *, anchor: str = "生存点余额：1000",
+                         old_value: str = "900", new_value: str = "1000",
+                         include_summary: bool = False):
     candidate = attempt / "candidate.md"
     final_body = attempt / "workspace" / "final_body.md"
     final_body.write_bytes(candidate.read_bytes())
-    anchor = "生存点余额：1000"
     deltas = [{
-        "delta_id": "delta-0001", "field": "生存点余额", "old_value": "900",
-        "new_value": "1000", "source_anchor": anchor,
+        "delta_id": "delta-0001", "field": "生存点余额", "old_value": old_value,
+        "new_value": new_value, "source_anchor": anchor,
         "source_excerpt_sha256": vcc.sha256_text(anchor), "fact_lock_ids": ["fl-0001"],
     }]
     delta_path = attempt / "deltas" / "state.json"
     delta_path.parent.mkdir(parents=True, exist_ok=True)
     delta_path.write_text(json.dumps(deltas, ensure_ascii=False), encoding="utf-8")
+    summary_frontmatter = ""
+    if include_summary:
+        summary_path = attempt / "deltas" / "summary.md"
+        summary_path.write_text(
+            "- repair-balance-0001：系统余额修正为1100。\n", encoding="utf-8"
+        )
+        summary_frontmatter = f"summary_delta_sha256: {vcc.sha256_file(summary_path)}\n"
     review = attempt / "reviews" / "state.md"
     review.parent.mkdir(parents=True, exist_ok=True)
     review.write_text(
         "---\nnode_id: chapter-0001\nattempt_id: attempt-0001\n"
         f"reviewed_sha256: {vcc.sha256_file(candidate)}\n"
         f"state_delta_sha256: {vcc.sha256_file(delta_path)}\n"
+        f"{summary_frontmatter}"
         "review_prompt_version: state-v3.0\nreviewed_at: 2026-08-11T10:01:00+00:00\n"
         "total_result: pass\n---\n# 状态回证\n",
         encoding="utf-8",
@@ -123,6 +140,89 @@ def make_working_copy_attempt(root: Path, *, balance: int = 1000) -> Path:
     return attempt
 
 
+def make_repair_attempt(root: Path, *, include_approved_change: bool = True) -> Path:
+    attempt = root / "attempt"
+    shutil.copytree(ATTEMPT_OK, attempt)
+    source = attempt / "workspace" / "source.md"
+    source_text = source.read_text(encoding="utf-8")
+    candidate_text = source_text.replace("生存点余额：1000", "生存点余额：1100")
+    candidate = attempt / "candidate.md"
+    candidate.write_text(candidate_text, encoding="utf-8")
+    target = root / "正文" / "第001章_风起（草稿）.md"
+    target.parent.mkdir(parents=True)
+    target.write_text(candidate_text, encoding="utf-8")
+
+    basis = attempt / "workspace" / "repair-basis.md"
+    issue_anchor = "审查问题：生存点余额应为1100，不是1000。"
+    basis.write_text(issue_anchor + "\n", encoding="utf-8")
+    source_anchor = "生存点余额：1000"
+    repair_anchor = "生存点余额：1100"
+    changes = []
+    if include_approved_change:
+        changes.append({
+            "change_id": "repair-balance-0001",
+            "dimensions": ["facts", "numbers", "system_boundary"],
+            "fact_lock_ids": ["fl-0001"],
+            "old_value": "1000",
+            "new_value": "1100",
+            "source_anchor": source_anchor,
+            "source_anchor_sha256": vcc.sha256_text(source_anchor),
+            "candidate_anchor": repair_anchor,
+            "candidate_anchor_sha256": vcc.sha256_text(repair_anchor),
+            "issue_anchor": issue_anchor,
+            "issue_anchor_sha256": vcc.sha256_text(issue_anchor),
+            "protected_values_before": ["余额=1000"],
+            "protected_values_after": ["余额=1100"],
+            "downstream_impact": "state_rebuild",
+        })
+    approved = attempt / "approved-changes.json"
+    approved.write_text(json.dumps(changes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    source_hash = vcc.sha256_file(source)
+    candidate_hash = vcc.sha256_file(candidate)
+    (attempt / "naturalization.md").write_text(
+        "---\n"
+        "node_id: chapter-0001\n"
+        "attempt_id: attempt-0001\n"
+        f"source_sha256: {source_hash}\n"
+        f"candidate_sha256: {candidate_hash}\n"
+        "prompt_version: repair-v2.0\n"
+        "processed_at: 2026-08-20T10:00:00+00:00\n"
+        "naturalization_result: repaired\n"
+        "review_subject: repair\n"
+        f"base_committed_sha256: {source_hash}\n"
+        f"repair_candidate_sha256: {candidate_hash}\n"
+        f"repair_target_path: {target.as_posix()}\n"
+        f"approved_changes_sha256: {vcc.sha256_file(approved)}\n"
+        f"repair_basis_sha256: {vcc.sha256_file(basis)}\n"
+        "---\n# Repair 记录\n",
+        encoding="utf-8",
+    )
+    locks = json.loads((attempt / "fact-lock.json").read_text(encoding="utf-8"))
+    locks[0]["repair_anchor"] = repair_anchor
+    locks[0]["repair_anchor_sha256"] = vcc.sha256_text(repair_anchor)
+    (attempt / "fact-lock.json").write_text(
+        json.dumps(locks, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    (attempt / "state.json").write_text(
+        json.dumps({
+            "status": "summary_staged",
+            "node_id": "chapter-0001",
+            "attempt_id": "attempt-0001",
+        }),
+        encoding="utf-8",
+    )
+    write_reviews(attempt, subject="repair")
+    write_state_evidence(
+        attempt,
+        anchor=repair_anchor,
+        old_value="1000",
+        new_value="1100",
+        include_summary=True,
+    )
+    return attempt
+
+
 class TestValidateChapterCandidate(unittest.TestCase):
     def test_working_copy_expression_rewrite_allows_hash_drift_with_warning(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -147,6 +247,10 @@ class TestValidateChapterCandidate(unittest.TestCase):
             ("成功率50%。", "成功率5%。"),
             ("温度降到零下20度。", "温度降到零下2度。"),
             ("温度降到零下20度。", "温度升到20度。"),
+            ("柴油还剩100升。", "柴油还剩1000升。"),
+            ("载重上限20吨。", "载重上限200吨。"),
+            ("电网输出5000V。", "电网输出500V。"),
+            ("冷启动耗时30秒。", "冷启动耗时300秒。"),
         ]:
             with self.subTest(source=source, candidate=candidate):
                 ok, errors = vcc.compare_sequences(source, candidate)
@@ -206,7 +310,7 @@ class TestValidateChapterCandidate(unittest.TestCase):
     def test_working_copy_reviews_are_provisional_and_reject_review_passed(self):
         with tempfile.TemporaryDirectory() as tmp:
             attempt = make_working_copy_attempt(Path(tmp))
-            write_reviews(attempt, working_copy=True)
+            write_reviews(attempt, subject="working_copy")
             report = vcc.check_attempt(
                 attempt,
                 allow_working_copy=True,
@@ -225,6 +329,145 @@ class TestValidateChapterCandidate(unittest.TestCase):
                 require_reviews=True,
             )
             self.assertFalse(report["checks"]["review_subject"]["ok"])
+
+    def test_repair_approved_fact_change_is_commit_eligible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_repair_attempt(Path(tmp))
+            report = vcc.check_attempt(
+                attempt,
+                allow_repair=True,
+                require_reviews=True,
+                require_state_validation=True,
+            )
+            self.assertTrue(report["ok"], report)
+            self.assertTrue(report["eligible_for_review_passed"])
+            self.assertTrue(report["checks"]["approved_changes"]["ok"])
+
+    def test_repair_rejects_unapproved_fact_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_repair_attempt(Path(tmp), include_approved_change=False)
+            report = vcc.check_attempt(
+                attempt,
+                allow_repair=True,
+                require_reviews=True,
+                require_state_validation=True,
+            )
+            self.assertFalse(report["ok"])
+            self.assertFalse(report["eligible_for_review_passed"])
+            self.assertFalse(report["checks"]["approved_changes"]["ok"])
+
+    def test_repair_rejects_changes_outside_approved_anchors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_repair_attempt(Path(tmp))
+            candidate = attempt / "candidate.md"
+            candidate.write_text(
+                candidate.read_text(encoding="utf-8").replace("远处有狗在叫", "远处有枪在响"),
+                encoding="utf-8",
+            )
+            target = Path(tmp) / "正文" / "第001章_风起（草稿）.md"
+            target.write_bytes(candidate.read_bytes())
+            record = attempt / "naturalization.md"
+            text = record.read_text(encoding="utf-8")
+            old_hash = vcc.parse_frontmatter(record)["candidate_sha256"]
+            new_hash = vcc.sha256_file(candidate)
+            record.write_text(
+                text.replace(old_hash, new_hash), encoding="utf-8"
+            )
+            write_reviews(attempt, subject="repair")
+            write_state_evidence(
+                attempt, anchor="生存点余额：1100", old_value="1000",
+                new_value="1100", include_summary=True,
+            )
+            report = vcc.check_attempt(
+                attempt, allow_repair=True, require_reviews=True,
+                require_state_validation=True,
+            )
+            self.assertFalse(report["ok"])
+            self.assertTrue(any(
+                "outside approved" in error
+                for error in report["checks"]["approved_changes"]["errors"]
+            ))
+
+    def test_repair_rejects_wide_anchor_hiding_extra_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_text = "狗在叫。生存点余额：1000。\n"
+            candidate_text = "枪在响。生存点余额：1100。\n"
+            basis = root / "repair-basis.md"
+            basis.write_text("余额应从1000修复为1100。\n", encoding="utf-8")
+            changes = [{
+                "change_id": "repair-balance-0001",
+                "dimensions": ["facts", "numbers", "system_boundary"],
+                "fact_lock_ids": ["fl-0001"],
+                "old_value": "1000",
+                "new_value": "1100",
+                "source_anchor": source_text,
+                "source_anchor_sha256": vcc.sha256_text(source_text),
+                "candidate_anchor": candidate_text,
+                "candidate_anchor_sha256": vcc.sha256_text(candidate_text),
+                "issue_anchor": "余额应从1000修复为1100。",
+                "issue_anchor_sha256": vcc.sha256_text("余额应从1000修复为1100。"),
+                "protected_values_before": ["余额=1000"],
+                "protected_values_after": ["余额=1100"],
+                "downstream_impact": "state_rebuild",
+            }]
+            approved = root / "approved-changes.json"
+            approved.write_text(
+                json.dumps(changes, ensure_ascii=False), encoding="utf-8"
+            )
+            result = vcc.validate_repair_changes(
+                approved, basis, source_text=source_text, candidate_text=candidate_text,
+            )
+            self.assertTrue(any(
+                "beyond declared" in error for error in result["errors"]
+            ))
+
+    def test_state_rebuild_rejects_empty_state_and_missing_summary_deltas(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_repair_attempt(Path(tmp))
+            delta_path = attempt / "deltas" / "state.json"
+            delta_path.write_text("[]\n", encoding="utf-8")
+            (attempt / "deltas" / "summary.md").unlink()
+            review = attempt / "reviews" / "state.md"
+            text = review.read_text(encoding="utf-8")
+            old_hash = vcc.parse_frontmatter(review)["state_delta_sha256"]
+            review.write_text(
+                text.replace(old_hash, vcc.sha256_file(delta_path)), encoding="utf-8"
+            )
+            report = vcc.check_attempt(
+                attempt, allow_repair=True, require_reviews=True,
+                require_state_validation=True,
+            )
+            self.assertFalse(report["ok"])
+            errors = report["checks"]["state_evidence"]["errors"]
+            self.assertTrue(any("non-empty" in error for error in errors))
+            self.assertTrue(any("summary.md" in error for error in errors))
+
+    def test_state_rebuild_rejects_unrelated_nonempty_deltas(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_repair_attempt(Path(tmp))
+            write_state_evidence(
+                attempt, anchor="生存点余额：1100", old_value="500",
+                new_value="600", include_summary=True,
+            )
+            report = vcc.check_attempt(
+                attempt, allow_repair=True, require_reviews=True,
+                require_state_validation=True,
+            )
+            self.assertFalse(report["ok"])
+            self.assertTrue(any(
+                "does not cover approved change" in error
+                for error in report["checks"]["state_evidence"]["errors"]
+            ))
+
+    def test_repair_requires_reviews_and_state_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = make_repair_attempt(Path(tmp))
+            report = vcc.check_attempt(attempt, allow_repair=True)
+            self.assertFalse(report["ok"])
+            errors = report["checks"]["review_subject"]["errors"]
+            self.assertTrue(any("--require-reviews" in error for error in errors))
+            self.assertTrue(any("--require-state-validation" in error for error in errors))
 
     def test_not_requested_requires_byte_identical_candidate(self):
         with tempfile.TemporaryDirectory() as tmp:

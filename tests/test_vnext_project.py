@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import sys as _sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -419,6 +420,46 @@ class TestGenesisAndChain(unittest.TestCase):
         self.assertEqual(head["rebase_id"], manifest["rebase_id"])
         self.assertTrue((root / "修复记录" / "生产状态" / "rebases" / manifest["rebase_id"] / "manifest.json").is_file())
 
+    def test_rebase_manifest_failure_keeps_head_normal(self):
+        root = self.make_project()
+        tx.create_genesis(root, PROJECT_ID)
+        before = tx.read_head(root)
+        with mock.patch.object(tx, "atomic_write_json", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                tx.rebase_start(
+                    root,
+                    project_id=PROJECT_ID,
+                    base_head_transaction_id="tx-genesis",
+                    old_generation_id="gen-0001",
+                    new_generation_id="gen-0002",
+                    base_head_sha256=tx.head_hash(root),
+                )
+        self.assertEqual(tx.read_head(root), before)
+
+    def test_rebase_start_rejects_wrong_recovery_base_before_manifest(self):
+        root = self.make_project()
+        tx.create_genesis(root, PROJECT_ID)
+        before = tx.read_head(root)
+        for field, value in (
+            ("base_head_transaction_id", "tx-wrong"),
+            ("old_generation_id", "gen-wrong"),
+            ("new_generation_id", "gen-0001"),
+        ):
+            kwargs = {
+                "project_id": PROJECT_ID,
+                "base_head_transaction_id": "tx-genesis",
+                "old_generation_id": "gen-0001",
+                "new_generation_id": "gen-0002",
+                "base_head_sha256": tx.head_hash(root),
+            }
+            kwargs[field] = value
+            with self.subTest(field=field):
+                with self.assertRaises(ValueError):
+                    tx.rebase_start(root, **kwargs)
+                self.assertEqual(tx.read_head(root), before)
+        rebase_root = root / "修复记录" / "生产状态" / "rebases"
+        self.assertFalse(rebase_root.exists())
+
     def test_rebase_abort_restores_normal_mode(self):
         root = self.make_project()
         tx.create_genesis(root, PROJECT_ID)
@@ -436,6 +477,42 @@ class TestGenesisAndChain(unittest.TestCase):
         head = tx.read_head(root)
         self.assertEqual(head["operation_mode"], "normal")
         self.assertEqual(head["generation_id"], "gen-0001")
+
+    def test_rebase_complete_atomically_switches_shadow_chain(self):
+        root = self.make_project()
+        tx.create_genesis(root, PROJECT_ID)
+        tx.rebase_start(
+            root, project_id=PROJECT_ID,
+            base_head_transaction_id="tx-genesis",
+            old_generation_id="gen-0001", new_generation_id="gen-0002",
+            base_head_sha256=tx.head_hash(root), rebase_id="rebase-test-complete",
+        )
+        target_id = "tx-chapter-0001-shadow"
+        target_dir = root / tx.TRANSACTIONS_DIR / target_id
+        target_dir.mkdir(parents=True)
+        manifest = {
+            "project_id": PROJECT_ID,
+            "transaction_id": target_id,
+            "parent_transaction_id": "tx-genesis",
+            "generation_id": "gen-0002",
+            "node_id": "chapter-0001",
+            "manifest_sha256": "a" * 64,
+        }
+        tx.atomic_write_json(target_dir / "manifest.json", manifest)
+        head = tx.rebase_complete(
+            root, project_id=PROJECT_ID,
+            base_head_sha256=tx.head_hash(root),
+            head_transaction_id=target_id, generation_id="gen-0002",
+            projection_hashes={"总结/主角状态仓库.md": "b" * 64},
+            committed_node_id="chapter-0001",
+        )
+        self.assertEqual(head["operation_mode"], "normal")
+        self.assertEqual(head["head_transaction_id"], target_id)
+        self.assertEqual(head["generation_id"], "gen-0002")
+        self.assertNotIn("base_head_transaction_id", head)
+        self.assertEqual(
+            head["projection_hashes"]["总结/主角状态仓库.md"], "b" * 64
+        )
 
     def test_plan_activation_switches_window(self):
         root = self.make_project()

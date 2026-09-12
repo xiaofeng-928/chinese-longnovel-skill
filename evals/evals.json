@@ -70,13 +70,14 @@
       "id": 6,
       "name": "review-repair-refreshes-state-only-when-facts-change",
       "prompt": "我要求对已提交的第11-15章审查并修复。第12章只改了句式，第14章则改了关键交易结果和系统余额。请说明审后总结与状态仓库怎么处理；不要实际改文件。",
-      "expected_output": "审查按连续5章执行。第12章只更新正文哈希及关联元数据，不重写语义总结和仓库；第14章重新生成 summary/state delta，并从影响点重建主角/系统仓库及受影响后续投影。",
+      "expected_output": "审查按连续5章执行并创建 repair attempts。第12章只更新正文哈希及关联元数据；第14章用 approved-changes 绑定交易和余额修复，重新生成 summary/state delta，并自动从影响点 shadow rebase 受影响后续投影。全部验证通过后成为正式稿，不再要求二次纳链授权。",
       "files": [],
       "expectations": [
         "第11-15章作为连续5章审查子批",
         "纯表达修复不重算语义总结和状态仓库",
         "交易结果和系统余额变化会重算章节总结与状态增量",
-        "从第14章影响点重建受影响的主角/系统仓库和后续投影"
+        "从第14章影响点自动 shadow rebase 受影响的主角/系统仓库和后续投影",
+        "不再要求用户二次确认是否纳入正式链"
       ]
     },
     {
@@ -90,6 +91,20 @@
         "记录 naturalization_result: not_requested 且源稿/候选字节一致",
         "每章仍会生成章节总结并更新主角/系统状态仓库",
         "状态回证后逐章提交为 review_pending 再继续下一章"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "approved-repair-promotes-current-working-copy",
+      "prompt": "第46章当前可见稿和 committed 版不同。审查发现 committed 版把36小时倒计时算错了，我现在明确说‘修复’，修复稿把剩余时间改成正确值，后面还有已经提交的章节。请说明 Skill 应怎样完成这次任务；不要实际改文件。",
+      "expected_output": "创建 review_subject: repair attempt，把审查问题冻结为 repair-basis，用 approved-changes 精确批准倒计时差异。双审和状态回证通过后自动 shadow rebase 后续章节；只有真实后文冲突才询问。完成后登记 review_passed 并去掉草稿标记。",
+      "files": [],
+      "expectations": [
+        "使用 review_subject: repair 而不是继续 working_copy",
+        "用 repair-basis 和 approved-changes 绑定被批准的事实差异",
+        "双审和状态回证通过后自动执行 shadow rebase",
+        "只有真实后文冲突才暂停询问作者",
+        "完成后登记 review_passed 且不要求第二次纳链授权"
       ]
     }
   ]

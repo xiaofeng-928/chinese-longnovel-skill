@@ -762,7 +762,38 @@ def rebase_start(project_root: Path, *, project_id: str, base_head_transaction_i
     """
     if rebase_id is None:
         rebase_id = f"rebase-{uuid_module.uuid4().hex[:12]}"
-    new_head = dict(read_head(project_root) or genesis_head(project_id))
+    current_head = read_head(project_root)
+    if current_head is None:
+        raise ValueError("rebase requires an existing commit head")
+    if head_hash(project_root) != base_head_sha256:
+        raise ValueError("commit head compare-and-swap failed")
+    if current_head.get("operation_mode", "normal") != "normal":
+        raise ValueError("rebase can only start from normal operation mode")
+    if current_head.get("project_id") != project_id:
+        raise ValueError("rebase project_id does not match current head")
+    if current_head.get("head_transaction_id") != base_head_transaction_id:
+        raise ValueError("rebase base transaction does not match current head")
+    if current_head.get("generation_id") != old_generation_id:
+        raise ValueError("rebase old generation does not match current head")
+    if new_generation_id == old_generation_id:
+        raise ValueError("rebase new generation must differ from old generation")
+    rebase_parent = project_root / "修复记录" / "生产状态" / "rebases"
+    rebase_parent.mkdir(parents=True, exist_ok=True)
+    rebase_dir = rebase_parent / rebase_id
+    rebase_dir.mkdir()
+    manifest = {
+        "rebase_id": rebase_id,
+        "project_id": project_id,
+        "base_head_transaction_id": base_head_transaction_id,
+        "base_head_sha256": base_head_sha256,
+        "old_generation_id": old_generation_id,
+        "new_generation_id": new_generation_id,
+        "operation_mode": "maintenance",
+        "created_at": now_iso(),
+    }
+    # Prepare durable recovery evidence before the head enters maintenance.
+    atomic_write_json(rebase_dir / "manifest.json", manifest)
+    new_head = dict(current_head)
     new_head.update({
         "project_id": project_id,
         "rebase_id": rebase_id,
@@ -773,18 +804,6 @@ def rebase_start(project_root: Path, *, project_id: str, base_head_transaction_i
         "operation_mode": "maintenance",
     })
     commit_head_cas(project_root, new_head, base_head_sha256)
-    rebase_dir = project_root / "修复记录" / "生产状态" / "rebases" / rebase_id
-    rebase_dir.mkdir(parents=True, exist_ok=True)
-    manifest = {
-        "rebase_id": rebase_id,
-        "project_id": project_id,
-        "base_head_transaction_id": base_head_transaction_id,
-        "old_generation_id": old_generation_id,
-        "new_generation_id": new_generation_id,
-        "operation_mode": "maintenance",
-        "created_at": now_iso(),
-    }
-    atomic_write_json(rebase_dir / "manifest.json", manifest)
     return manifest
 
 
@@ -804,17 +823,52 @@ def rebase_abort(project_root: Path, *, project_id: str, base_head_sha256: str,
 
 
 def rebase_complete(project_root: Path, *, project_id: str, base_head_sha256: str,
-                    head_transaction_id: str, generation_id: str) -> dict:
+                    head_transaction_id: str, generation_id: str,
+                    projection_hashes: dict | None = None,
+                    committed_node_id: str | None = None) -> dict:
     """rebase 全部后继节点验证通过后，原子切回 normal。"""
-    new_head = dict(read_head(project_root) or genesis_head(project_id))
+    current_head = read_head(project_root)
+    if current_head is None or head_hash(project_root) != base_head_sha256:
+        raise RuntimeError("rebase completion compare-and-swap failed")
+    if current_head.get("project_id") != project_id:
+        raise ValueError("rebase completion project_id mismatch")
+    if current_head.get("operation_mode") != "maintenance":
+        raise ValueError("rebase completion requires maintenance mode")
+    if current_head.get("new_generation_id") != generation_id:
+        raise ValueError("rebase completion generation mismatch")
+    target = load_json(tx_manifest_path(project_root, head_transaction_id))
+    if not target or target.get("generation_id") != generation_id:
+        raise ValueError("rebase target transaction missing or generation mismatch")
+    new_head = dict(current_head)
     new_head.update({
         "project_id": project_id,
         "head_transaction_id": head_transaction_id,
+        "parent_transaction_id": target.get("parent_transaction_id"),
         "generation_id": generation_id,
         "operation_mode": "normal",
         "rebase_id": None,
     })
-    commit_head_cas(project_root, new_head, base_head_sha256)
+    if projection_hashes is not None:
+        new_head["projection_hashes"] = dict(projection_hashes)
+    if committed_node_id is not None:
+        new_head["committed_node_id"] = committed_node_id
+    chain = chain_parents(project_root, new_head)
+    base_transaction_id = current_head.get("base_head_transaction_id")
+    if base_transaction_id not in {item.get("transaction_id") for item in chain}:
+        raise ValueError("shadow chain does not descend from rebase base transaction")
+    new_head["chain_hash"] = sha256_text(
+        ":".join(
+            [project_id]
+            + [item.get("manifest_sha256", "tx-genesis") for item in reversed(chain)]
+        )
+    )
+    new_head.pop("base_head_transaction_id", None)
+    new_head.pop("old_generation_id", None)
+    new_head.pop("new_generation_id", None)
+    new_head["commit_hash"] = canonical_json_hash(new_head, ("commit_hash",))
+    if head_hash(project_root) != base_head_sha256:
+        raise RuntimeError("rebase completion compare-and-swap failed")
+    atomic_write_json(project_root / COMMIT_HEAD_PATH, new_head)
     return new_head
 
 

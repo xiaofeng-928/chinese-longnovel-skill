@@ -431,6 +431,26 @@ class TestWorkflowContractDocs(unittest.TestCase):
         ]:
             self.assertIn(phrase, skill + context + workflow + structure + contract + prompt)
 
+    def test_repair_mode_promotes_approved_fixes_without_second_authorization(self):
+        docs = "\n".join(read_doc(path) for path in [
+            "SKILL.md",
+            "references/长篇上下文与一致性.md",
+            "references/正文生产与审修.md",
+            "references/项目结构与迁移.md",
+            "references/自动化脚本契约.md",
+            "prompts/正文审查与修复提示词.md",
+        ])
+        for phrase in [
+            "review_subject: repair",
+            "approved-changes.json",
+            "workspace/repair-basis.md",
+            "--allow-repair",
+            "--require-state-validation",
+            "shadow rebase",
+            "不再要求第二次",
+        ]:
+            self.assertIn(phrase, docs)
+
     def test_skill_metadata_and_archive_contract_are_normalized(self):
         skill = read_doc("SKILL.md")
         structure = read_doc("references/项目结构与迁移.md")
